@@ -1,0 +1,19 @@
+terraform {
+  required_version = ">= 1.5.0"
+
+  required_providers {
+    google = {
+      source  = "hashicorp/google"
+      version = "~> 5.0"
+    }
+    slack = {
+      source  = "pablovarela/slack"
+      version = "~> 1.2"
+    }
+  }
+
+  backend "gcs" {
+    bucket = "relics9"
+    prefix = "terraform/state"
+  }
+}

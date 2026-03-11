@@ -1,0 +1,16 @@
+# Service account keys - NEVER commit these
+*.json
+!package.json
+
+# Terraform
+.terraform/
+.terraform.lock.hcl
+terraform.tfstate
+terraform.tfstate.backup
+*.tfvars
+!*.tfvars.example
+.terraformrc
+terraform.rc
+
+# Local
+.DS_Store

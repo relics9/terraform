@@ -1,0 +1,19 @@
+project_id       = "relics9"
+region           = "asia-northeast1"
+credentials_file = "relics9-1dc2283b85f8.json"
+
+# Slack設定
+# チャンネルはTerraformで自動作成 (slack-token.json のトークンを使用)
+# Slack App作成後に取得: https://api.slack.com/apps
+slack_webhook_url = "https://hooks.slack.com/services/T0AKQLV62J1/XXXXXXXXX/XXXXXXXXXXXXXXXXXXXXXXXXXX"
+slack_bot_token   = "xoxb-XXXXXXXXXX-XXXXXXXXXX-XXXXXXXXXXXXXXXXXXXXXXXXXX"
+
+# GitHub設定
+# トークンは github-token.json から自動読み込み
+github_owner = "relics9"
+github_repo  = "your-app-repo"
+
+# Anthropic API Key は claude-token.json から自動読み込み
+
+# ログフィルタ (デフォルト: ERRORレベル以上)
+log_filter = "severity>=ERROR"
