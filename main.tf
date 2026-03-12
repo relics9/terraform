@@ -96,17 +96,28 @@ resource "google_pubsub_topic" "error_logs" {
   depends_on = [google_project_service.apis]
 }
 
-resource "google_pubsub_subscription" "error_logs_sub" {
-  name    = "error-logs-sub"
+# Push サブスクリプション: anthropic-agent の /notify エンドポイントへ転送
+resource "google_pubsub_subscription" "error_logs_push" {
+  name    = "error-logs-push"
   topic   = google_pubsub_topic.error_logs.name
   project = var.project_id
 
-  ack_deadline_seconds = 60
+  ack_deadline_seconds = 300
+
+  push_config {
+    push_endpoint = "${google_cloud_run_v2_service.anthropic_agent.uri}/notify"
+
+    oidc_token {
+      service_account_email = google_service_account.functions_sa.email
+    }
+  }
 
   retry_policy {
     minimum_backoff = "10s"
     maximum_backoff = "300s"
   }
+
+  depends_on = [google_cloud_run_v2_service.anthropic_agent]
 }
 
 # ==============================================================================
@@ -159,150 +170,120 @@ resource "google_project_iam_member" "functions_log_writer" {
   member  = "serviceAccount:${google_service_account.functions_sa.email}"
 }
 
-# ==============================================================================
-# Cloud Storage - Cloud Functionsのソースコード保存
-# ==============================================================================
-resource "google_storage_bucket_object" "slack_notifier_source" {
-  name   = "functions/slack-notifier-${filemd5("${path.module}/functions/slack_notifier/main.py")}.zip"
-  bucket = "relics9"
-  source = data.archive_file.slack_notifier.output_path
-}
-
-data "archive_file" "slack_notifier" {
-  type        = "zip"
-  output_path = "/tmp/slack_notifier.zip"
-  source_dir  = "${path.module}/functions/slack_notifier"
-}
-
-resource "google_storage_bucket_object" "ai_agent_source" {
-  name   = "functions/ai-agent-${filemd5("${path.module}/functions/ai_agent/main.py")}.zip"
-  bucket = "relics9"
-  source = data.archive_file.ai_agent.output_path
-}
-
-data "archive_file" "ai_agent" {
-  type        = "zip"
-  output_path = "/tmp/ai_agent.zip"
-  source_dir  = "${path.module}/functions/ai_agent"
-}
+# (Cloud Functions は anthropic-agent Cloud Run に統合済み)
 
 # ==============================================================================
-# Cloud Function 1: Slack Notifier
-# Pub/Subからエラーログを受け取りSlackに通知
+# Artifact Registry - Dockerイメージ保存
 # ==============================================================================
-resource "google_cloudfunctions2_function" "slack_notifier" {
-  name     = "slack-notifier"
-  location = var.region
-  project  = var.project_id
-
-  build_config {
-    runtime     = "python311"
-    entry_point = "notify_slack"
-
-    source {
-      storage_source {
-        bucket = "relics9"
-        object = google_storage_bucket_object.slack_notifier_source.name
-      }
-    }
-  }
-
-  service_config {
-    max_instance_count = 10
-    min_instance_count = 0
-    available_memory   = "256M"
-    timeout_seconds    = 60
-
-    service_account_email = google_service_account.functions_sa.email
-
-    environment_variables = {
-      PROJECT_ID       = var.project_id
-      SLACK_CHANNEL_ID = slack_conversation.error_alerts.id
-    }
-
-    secret_environment_variables {
-      key        = "SLACK_WEBHOOK_URL"
-      project_id = var.project_id
-      secret     = google_secret_manager_secret.slack_webhook_url.secret_id
-      version    = "latest"
-    }
-  }
-
-  event_trigger {
-    trigger_region = var.region
-    event_type     = "google.cloud.pubsub.topic.v1.messagePublished"
-    pubsub_topic   = google_pubsub_topic.error_logs.id
-    retry_policy   = "RETRY_POLICY_RETRY"
-  }
+resource "google_artifact_registry_repository" "docker" {
+  project       = var.project_id
+  location      = var.region
+  repository_id = "relics9"
+  format        = "DOCKER"
 
   depends_on = [google_project_service.apis]
 }
 
 # ==============================================================================
-# Cloud Function 2: AI Agent
-# SlackのBotメンションを受けてClaudeでエラー分析 & GitHub PR作成
+# Cloud Run Service: Anthropic Agent (Go)
 # ==============================================================================
-resource "google_cloudfunctions2_function" "ai_agent" {
-  name     = "ai-agent"
+
+# Dockerイメージをビルド & プッシュ (Cloud Build使用)
+resource "null_resource" "build_anthropic_agent" {
+  triggers = {
+    source_hash = sha256(join("", [
+      for f in sort(fileset("${path.module}/services/anthropic_agent", "**")) :
+      filesha256("${path.module}/services/anthropic_agent/${f}")
+    ]))
+  }
+
+  provisioner "local-exec" {
+    command = "CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE=${path.module}/${var.credentials_file} gcloud builds submit ${path.module}/services/anthropic_agent --tag ${var.region}-docker.pkg.dev/${var.project_id}/relics9/anthropic-agent:latest --project=${var.project_id}"
+  }
+
+  depends_on = [google_artifact_registry_repository.docker]
+}
+
+resource "google_cloud_run_v2_service" "anthropic_agent" {
+  name     = "anthropic-agent"
   location = var.region
   project  = var.project_id
 
-  build_config {
-    runtime     = "python311"
-    entry_point = "handle_slack_event"
+  template {
+    service_account = google_service_account.functions_sa.email
 
-    source {
-      storage_source {
-        bucket = "relics9"
-        object = google_storage_bucket_object.ai_agent_source.name
+    timeout = "300s"
+
+    containers {
+      image = "${var.region}-docker.pkg.dev/${var.project_id}/relics9/anthropic-agent:latest"
+
+      resources {
+        limits = {
+          cpu    = "1"
+          memory = "512Mi"
+        }
+      }
+
+      env {
+        name  = "PROJECT_ID"
+        value = var.project_id
+      }
+      env {
+        name  = "GITHUB_OWNER"
+        value = var.github_owner
+      }
+      env {
+        name  = "GITHUB_REPO"
+        value = var.github_repo
+      }
+
+      env {
+        name = "SLACK_WEBHOOK_URL"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.slack_webhook_url.secret_id
+            version = "latest"
+          }
+        }
+      }
+      env {
+        name = "SLACK_BOT_TOKEN"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.slack_bot_token.secret_id
+            version = "latest"
+          }
+        }
+      }
+      env {
+        name = "GITHUB_TOKEN"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.github_token.secret_id
+            version = "latest"
+          }
+        }
+      }
+      env {
+        name = "ANTHROPIC_API_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.anthropic_api_key.secret_id
+            version = "latest"
+          }
+        }
       }
     }
   }
 
-  service_config {
-    max_instance_count = 5
-    min_instance_count = 0
-    available_memory   = "512M"
-    timeout_seconds    = 300
-
-    service_account_email = google_service_account.functions_sa.email
-
-    environment_variables = {
-      PROJECT_ID   = var.project_id
-      GITHUB_OWNER = var.github_owner
-      GITHUB_REPO  = var.github_repo
-    }
-
-    secret_environment_variables {
-      key        = "SLACK_BOT_TOKEN"
-      project_id = var.project_id
-      secret     = google_secret_manager_secret.slack_bot_token.secret_id
-      version    = "latest"
-    }
-
-    secret_environment_variables {
-      key        = "GITHUB_TOKEN"
-      project_id = var.project_id
-      secret     = google_secret_manager_secret.github_token.secret_id
-      version    = "latest"
-    }
-
-    secret_environment_variables {
-      key        = "ANTHROPIC_API_KEY"
-      project_id = var.project_id
-      secret     = google_secret_manager_secret.anthropic_api_key.secret_id
-      version    = "latest"
-    }
-  }
-
-  depends_on = [google_project_service.apis]
+  depends_on = [null_resource.build_anthropic_agent]
 }
 
-# AI AgentのCloud Functionを公開 (Slack Events APIからのWebhookを受け付けるため)
-resource "google_cloud_run_service_iam_member" "ai_agent_public" {
+# 公開アクセス許可 (Slack Events APIからのWebhookを受け付けるため)
+resource "google_cloud_run_v2_service_iam_member" "anthropic_agent_public" {
   project  = var.project_id
   location = var.region
-  service  = google_cloudfunctions2_function.ai_agent.name
+  name     = google_cloud_run_v2_service.anthropic_agent.name
   role     = "roles/run.invoker"
   member   = "allUsers"
 }

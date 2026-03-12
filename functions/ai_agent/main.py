@@ -97,15 +97,7 @@ def _process_mention(event: dict) -> None:
         # Claudeでエラー分析
         analysis = _analyze_with_claude(error_context)
 
-        # Slackに分析結果を投稿
-        _post_slack_message(
-            channel_id,
-            thread_ts,
-            bot_token,
-            f":brain: *AI エラー分析結果*\n\n{analysis['summary']}",
-        )
-
-        # GitHub Issueを作成
+        # GitHub Issueを作成（分析結果はIssueに記載）
         issue_url = _create_github_issue(analysis)
         if issue_url:
             _post_slack_message(
@@ -113,6 +105,13 @@ def _process_mention(event: dict) -> None:
                 thread_ts,
                 bot_token,
                 f":github: *GitHub Issueを作成しました*\n{issue_url}",
+            )
+        else:
+            _post_slack_message(
+                channel_id,
+                thread_ts,
+                bot_token,
+                ":x: GitHub Issueの作成に失敗しました",
             )
 
     else:
@@ -325,7 +324,7 @@ def _create_github_issue(analysis: dict) -> str | None:
             headers=headers,
             method="POST",
             data={
-                "title": analysis.get("pr_title", "bug: GCPエラー検知 from AI agent"),
+                "title": analysis.get("pr_title") or analysis.get("root_cause", "")[:80] or "bug: GCPエラー検知 from AI agent",
                 "body": issue_body,
             },
         )
@@ -414,5 +413,10 @@ def _github_request(url: str, headers: dict, method: str = "GET", data: dict = N
     """GitHub APIにリクエストを送る"""
     body = json.dumps(data).encode("utf-8") if data else None
     req = urllib.request.Request(url, data=body, headers=headers, method=method)
-    with urllib.request.urlopen(req) as resp:
-        return json.loads(resp.read())
+    try:
+        with urllib.request.urlopen(req) as resp:
+            return json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode("utf-8")
+        print(f"GitHub APIエラー詳細: status={e.code}, body={error_body[:500]}")
+        raise

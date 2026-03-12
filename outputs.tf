@@ -1,12 +1,3 @@
-output "slack_notifier_function_url" {
-  description = "Slack Notifier Cloud Function URL"
-  value       = google_cloudfunctions2_function.slack_notifier.service_config[0].uri
-}
-
-output "ai_agent_function_url" {
-  description = "AI Agent Cloud Function URL (Slack Events API Webhook URLに設定する)"
-  value       = google_cloudfunctions2_function.ai_agent.service_config[0].uri
-}
 
 output "pubsub_topic_name" {
   description = "Pub/Sub topic for error logs"
@@ -31,4 +22,9 @@ output "slack_error_alerts_channel_id" {
 output "slack_ai_ops_channel_id" {
   description = "Slack #ai-ops チャンネルID"
   value       = slack_conversation.ai_ops.id
+}
+
+output "anthropic_agent_url" {
+  description = "Anthropic Agent Cloud Run URL (Slack Events API Webhook URLに設定する)"
+  value       = google_cloud_run_v2_service.anthropic_agent.uri
 }
