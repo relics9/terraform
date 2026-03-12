@@ -327,7 +327,6 @@ def _create_github_issue(analysis: dict) -> str | None:
             data={
                 "title": analysis.get("pr_title", "bug: GCPエラー検知 from AI agent"),
                 "body": issue_body,
-                "labels": ["bug", "ai-detected"],
             },
         )
         return issue_response.get("html_url")
