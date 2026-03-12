@@ -61,7 +61,8 @@ def _process_mention(event: dict) -> None:
     bot_token = os.environ["SLACK_BOT_TOKEN"]
 
     # コマンド解析
-    if "analyze" in text.lower():
+    text_lower = text.lower()
+    if "fix" in text_lower:
         # スレッドのメッセージ履歴を取得
         messages = _get_thread_messages(channel_id, thread_ts, bot_token)
         error_context = _extract_error_context(messages)
@@ -87,12 +88,39 @@ def _process_mention(event: dict) -> None:
                     bot_token,
                     f":github: *自動修正PRを作成しました*\n{pr_url}",
                 )
+
+    elif "issue" in text_lower:
+        # スレッドのメッセージ履歴を取得
+        messages = _get_thread_messages(channel_id, thread_ts, bot_token)
+        error_context = _extract_error_context(messages)
+
+        # Claudeでエラー分析
+        analysis = _analyze_with_claude(error_context)
+
+        # Slackに分析結果を投稿
+        _post_slack_message(
+            channel_id,
+            thread_ts,
+            bot_token,
+            f":brain: *AI エラー分析結果*\n\n{analysis['summary']}",
+        )
+
+        # GitHub Issueを作成
+        issue_url = _create_github_issue(analysis)
+        if issue_url:
+            _post_slack_message(
+                channel_id,
+                thread_ts,
+                bot_token,
+                f":github: *GitHub Issueを作成しました*\n{issue_url}",
+            )
+
     else:
         _post_slack_message(
             channel_id,
             thread_ts,
             bot_token,
-            ":wave: こんにちは！使い方:\n• `@ai-agent analyze` - このスレッドのエラーを分析してGitHub PRを作成します",
+            ":wave: こんにちは！使い方:\n• `@relics9-bot fix` - エラーを分析してGitHub PRを作成します\n• `@relics9-bot issue` - エラーをGitHub Issueとして登録します",
         )
 
 
@@ -259,6 +287,52 @@ def _create_github_pr(analysis: dict) -> str | None:
 
     except Exception as e:
         print(f"GitHub PR作成エラー: {e}")
+        return None
+
+
+def _create_github_issue(analysis: dict) -> str | None:
+    """GitHub APIを使ってIssueを作成する"""
+    github_token = os.environ["GITHUB_TOKEN"]
+    owner = os.environ["GITHUB_OWNER"]
+    repo = os.environ["GITHUB_REPO"]
+    base_url = f"https://api.github.com/repos/{owner}/{repo}"
+
+    headers = {
+        "Authorization": f"Bearer {github_token}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "Content-Type": "application/json",
+    }
+
+    issue_body = f"""## 🤖 AI Agent によるエラー報告
+
+### 根本原因
+{analysis.get('root_cause', '詳細は分析サマリーを参照')}
+
+### 分析サマリー
+{analysis.get('summary', '')}
+
+### 深刻度
+{analysis.get('severity', 'unknown')}
+
+---
+*このIssueはGCPエラーログを検知したAI Agentによって自動作成されました*
+"""
+
+    try:
+        issue_response = _github_request(
+            f"{base_url}/issues",
+            headers=headers,
+            method="POST",
+            data={
+                "title": analysis.get("pr_title", "bug: GCPエラー検知 from AI agent"),
+                "body": issue_body,
+                "labels": ["bug", "ai-detected"],
+            },
+        )
+        return issue_response.get("html_url")
+    except Exception as e:
+        print(f"GitHub Issue作成エラー: {e}")
         return None
 
 
