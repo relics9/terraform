@@ -111,7 +111,7 @@ def notify_slack(cloud_event):
                 "elements": [
                     {
                         "type": "mrkdwn",
-                        "text": ":robot_face: AIにエラー分析を依頼するには `@ai-agent analyze` とメンションしてください",
+                        "text": ":robot_face: AIにエラー分析を依頼するには、このメッセージのスレッド内で `@relics9-bot analyze` とメンションしてください",
                     }
                 ],
             },

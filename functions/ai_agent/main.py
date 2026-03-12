@@ -26,6 +26,10 @@ import anthropic
 @functions_framework.http
 def handle_slack_event(request):
     """Slack Events APIからのWebhookを処理する"""
+    # Slackのリトライは無視 (3秒タイムアウトによる重複処理を防ぐ)
+    if request.headers.get("X-Slack-Retry-Num"):
+        return ("OK", 200)
+
     # Slackの署名検証
     if not _verify_slack_signature(request):
         return ("Unauthorized", 401)
@@ -38,6 +42,7 @@ def handle_slack_event(request):
 
     # イベント処理
     event = payload.get("event", {})
+    print(f"DEBUG: payload_type={payload.get('type')}, event_type={event.get('type')}")
     if event.get("type") == "app_mention":
         # 非同期で処理 (Slackは3秒以内のレスポンスが必要)
         _process_mention(event)
@@ -139,6 +144,12 @@ def _analyze_with_claude(error_context: str) -> dict[str, Any]:
             response_text = response_text.split("```json")[1].split("```")[0]
         elif "```" in response_text:
             response_text = response_text.split("```")[1].split("```")[0]
+        else:
+            # { } の範囲を探してJSONを抽出
+            start = response_text.find("{")
+            end = response_text.rfind("}") + 1
+            if start != -1 and end > start:
+                response_text = response_text[start:end]
 
         return json.loads(response_text.strip())
     except (json.JSONDecodeError, IndexError):
@@ -184,9 +195,9 @@ def _create_github_pr(analysis: dict) -> str | None:
             data={"ref": f"refs/heads/{branch_name}", "sha": default_branch_sha},
         )
 
-        # ファイルが指定されている場合は更新
+        # ファイルが指定されている場合は更新 (スペース等の無効文字を含む場合はスキップ)
         file_path = fix.get("file_path")
-        if file_path:
+        if file_path and " " not in file_path and "(" not in file_path:
             # 既存ファイルのSHAを取得 (更新に必要)
             try:
                 existing_file = _github_request(
