@@ -41,6 +41,14 @@ func handlePubSubNotify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 即座に 200 を返して Pub/Sub の再送を防ぐ (Claude/GitHub API は数秒かかるため)
+	w.WriteHeader(http.StatusOK)
+	if f, ok := w.(http.Flusher); ok {
+		f.Flush()
+	}
+
+	go func() {
+
 	// ログエントリを解析
 	var logEntry map[string]interface{}
 	if err := json.Unmarshal(decoded, &logEntry); err != nil {
@@ -154,6 +162,13 @@ func handlePubSubNotify(w http.ResponseWriter, r *http.Request) {
 					"type": "mrkdwn",
 					"text": serviceField,
 				},
+			},
+			{
+				"type": "section",
+				"text": map[string]string{
+					"type": "mrkdwn",
+					"text": "*エラー:*",
+				},
 				"accessory": map[string]interface{}{
 					"type": "button",
 					"text": map[string]string{"type": "plain_text", "text": "Cloud Loggingで確認"},
@@ -191,8 +206,8 @@ func handlePubSubNotify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("Slack通知完了: severity=%s, resource=%s", severity, resourceType)
-	w.WriteHeader(http.StatusOK)
+		log.Printf("Slack通知完了: severity=%s, resource=%s", severity, resourceType)
+	}()
 }
 
 func analyzeErrorForNotification(severity, resourceType, errorMessage string, logEntry map[string]interface{}) string {
