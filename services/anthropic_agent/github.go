@@ -13,16 +13,10 @@ import (
 	"time"
 )
 
-// resolveRepo はサービス名から実際の GitHub リポジトリ名を解決する。
-// 優先順位: 1) REPO_MAP 環境変数 (例: "example-api=example,foo-svc=foo")
-//
-//	2) GitHub API でリポジトリ存在確認 + サフィックス除去フォールバック
-//	3) GITHUB_REPO 環境変数
+// resolveRepo は REPO_MAP 環境変数からサービス名に対応するリポジトリ名を返す。
+// REPO_MAP 形式: "example-api=example,foo-svc=foo"
+// 見つからない場合は空文字を返す。
 func resolveRepo(serviceName string) string {
-	owner := os.Getenv("GITHUB_OWNER")
-	token := os.Getenv("GITHUB_TOKEN")
-
-	// 1) REPO_MAP から検索
 	if repoMap := os.Getenv("REPO_MAP"); repoMap != "" {
 		for _, entry := range strings.Split(repoMap, ",") {
 			parts := strings.SplitN(strings.TrimSpace(entry), "=", 2)
@@ -32,31 +26,7 @@ func resolveRepo(serviceName string) string {
 			}
 		}
 	}
-
-	// 2) GitHub API でリポジトリを探索
-	if owner != "" && token != "" && serviceName != "" {
-		headers := githubHeaders(token)
-		candidates := []string{serviceName}
-		for _, suffix := range []string{"-api", "-service", "-svc", "-app", "-worker"} {
-			if strings.HasSuffix(serviceName, suffix) {
-				candidates = append(candidates, strings.TrimSuffix(serviceName, suffix))
-			}
-		}
-		for _, candidate := range candidates {
-			_, err := githubRequest("GET",
-				fmt.Sprintf("https://api.github.com/repos/%s/%s", owner, candidate),
-				headers, nil)
-			if err == nil {
-				log.Printf("[resolveRepo] GitHub API hit: %s -> %s", serviceName, candidate)
-				return candidate
-			}
-		}
-	}
-
-	// 3) GITHUB_REPO フォールバック
-	fallback := os.Getenv("GITHUB_REPO")
-	log.Printf("[resolveRepo] fallback: %s -> %s", serviceName, fallback)
-	return fallback
+	return ""
 }
 
 func createGitHubPR(analysis map[string]interface{}) string {

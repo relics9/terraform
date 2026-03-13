@@ -14,3 +14,4 @@ terraform.rc
 
 # Local
 .DS_Store
+services/anthropic_agent/anthropic-agent

@@ -105,6 +105,12 @@ func handlePubSubNotify(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("Pub/Sub受信: severity=%s, resource=%s, service=%s", severity, resourceType, serviceName)
 
+	// REPO_MAPに登録されていないサービスはスキップ
+	if resolveRepo(serviceName) == "" {
+		log.Printf("スキップ: service_name=%q はREPO_MAPに未登録 (severity=%s resource=%s)", serviceName, severity, resourceType)
+		return
+	}
+
 	// Claudeでエラーを分析
 	analysis := analyzeErrorForNotification(severity, resourceType, errorMessage, logEntry)
 
@@ -158,22 +164,20 @@ func handlePubSubNotify(w http.ResponseWriter, r *http.Request) {
 			},
 			{
 				"type": "section",
-				"text": map[string]string{
-					"type": "mrkdwn",
-					"text": serviceField,
+				"fields": []map[string]string{
+					{"type": "mrkdwn", "text": serviceField},
+					{"type": "mrkdwn", "text": "*エラー:*"},
 				},
 			},
 			{
-				"type": "section",
-				"text": map[string]string{
-					"type": "mrkdwn",
-					"text": "*エラー:*",
-				},
-				"accessory": map[string]interface{}{
-					"type": "button",
-					"text": map[string]string{"type": "plain_text", "text": "Cloud Loggingで確認"},
-					"url":   loggingURL,
-					"style": "danger",
+				"type": "actions",
+				"elements": []map[string]interface{}{
+					{
+						"type": "button",
+						"text": map[string]string{"type": "plain_text", "text": "Cloud Loggingで確認"},
+						"url":   loggingURL,
+						"style": "danger",
+					},
 				},
 			},
 			{
@@ -249,8 +253,11 @@ func fetchRepoContext(logEntry map[string]interface{}) string {
 		return ""
 	}
 
-	// サービス名と同名のリポジトリを探す
-	repo := serviceName
+	// REPO_MAP からリポジトリ名を解決
+	repo := resolveRepo(serviceName)
+	if repo == "" {
+		return ""
+	}
 	headers := githubHeaders(token)
 
 	// リポジトリのファイルツリーを取得
@@ -258,22 +265,7 @@ func fetchRepoContext(logEntry map[string]interface{}) string {
 		fmt.Sprintf("https://api.github.com/repos/%s/%s/git/trees/HEAD?recursive=1", owner, repo),
 		headers, nil)
 	if err != nil {
-		// サービス名の末尾サフィックスを除いて再試行 (例: example-api → example)
-		for _, suffix := range []string{"-api", "-service", "-svc", "-app", "-worker"} {
-			if strings.HasSuffix(repo, suffix) {
-				trimmed := strings.TrimSuffix(repo, suffix)
-				treeResp, err = githubRequest("GET",
-					fmt.Sprintf("https://api.github.com/repos/%s/%s/git/trees/HEAD?recursive=1", owner, trimmed),
-					headers, nil)
-				if err == nil {
-					repo = trimmed
-					break
-				}
-			}
-		}
-		if err != nil {
-			return fmt.Sprintf("## GitHubリポジトリ\nリポジトリ `%s/%s` が見つかりませんでした。\n\n", owner, serviceName)
-		}
+		return ""
 	}
 
 	// ソースファイルのパスを収集 (最大20件)
