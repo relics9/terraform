@@ -132,6 +132,7 @@ func handlePubSubNotify(w http.ResponseWriter, r *http.Request) {
 
 	// Slackに分析結果を通知
 	webhookURL := os.Getenv("SLACK_WEBHOOK_URL")
+	owner := os.Getenv("GITHUB_OWNER")
 
 	severityEmoji := map[string]string{
 		"CRITICAL":  ":red_circle:",
@@ -145,11 +146,23 @@ func handlePubSubNotify(w http.ResponseWriter, r *http.Request) {
 		emoji = ":warning:"
 	}
 
-	// サービス名フィールドを構築
+	// フィールドを構築
+	projectField := fmt.Sprintf("*プロジェクトID:*\n`%s`", projectID)
+
+	githubField := "*GitHub:*\n未特定"
+	if owner != "" && serviceName != "" {
+		repo := resolveRepo(serviceName)
+		if repo != "" {
+			githubField = fmt.Sprintf("*GitHub:*\n<https://github.com/%s/%s|%s/%s>", owner, repo, owner, repo)
+		}
+	}
+
 	serviceField := fmt.Sprintf("*サービス名:*\n`%s`", serviceName)
 	if serviceName == "" {
-		serviceField = fmt.Sprintf("*リソース種別:*\n%s", resourceType)
+		serviceField = fmt.Sprintf("*サービス名:*\n%s", resourceType)
 	}
+
+	loggingField := fmt.Sprintf("*エラーログ:*\n<%s|Cloud Loggingで確認>", loggingURL)
 
 	slackMsg := map[string]interface{}{
 		"blocks": []map[string]interface{}{
@@ -163,9 +176,10 @@ func handlePubSubNotify(w http.ResponseWriter, r *http.Request) {
 			{
 				"type": "section",
 				"fields": []map[string]string{
+					{"type": "mrkdwn", "text": projectField},
+					{"type": "mrkdwn", "text": githubField},
 					{"type": "mrkdwn", "text": serviceField},
-					{"type": "mrkdwn", "text": fmt.Sprintf("*リソース種別:*\n%s", resourceType)},
-					{"type": "mrkdwn", "text": fmt.Sprintf("*エラー:*\n```%s```", truncate(errorMessage, 200))},
+					{"type": "mrkdwn", "text": loggingField},
 				},
 			},
 			{
@@ -173,17 +187,6 @@ func handlePubSubNotify(w http.ResponseWriter, r *http.Request) {
 				"text": map[string]string{
 					"type": "mrkdwn",
 					"text": fmt.Sprintf(":brain: *AI分析:*\n%s", analysis),
-				},
-			},
-			{
-				"type": "actions",
-				"elements": []map[string]interface{}{
-					{
-						"type":  "button",
-						"text":  map[string]string{"type": "plain_text", "text": "Cloud Loggingで確認"},
-						"url":   loggingURL,
-						"style": "danger",
-					},
 				},
 			},
 			{"type": "divider"},
