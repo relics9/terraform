@@ -242,6 +242,7 @@ func analyzeErrorForNotification(severity, resourceType, errorMessage string, lo
 - 考えられる原因（コードの具体的な箇所があれば指摘してください）
 - 推奨アクション`, severity, resourceType, errorMessage, repoContext)
 
+	log.Printf("[Claude IN] analyzeErrorForNotification model=claude-opus-4-6 prompt=%d文字", len(prompt))
 	message, err := client.Messages.New(context.Background(), anthropic.MessageNewParams{
 		Model:     anthropic.F(anthropic.Model("claude-opus-4-6")),
 		MaxTokens: anthropic.F(int64(1000)),
@@ -250,9 +251,10 @@ func analyzeErrorForNotification(severity, resourceType, errorMessage string, lo
 		}),
 	})
 	if err != nil {
-		log.Printf("Claude APIエラー: %v", err)
+		log.Printf("[Claude IN] エラー: %v", err)
 		return fmt.Sprintf("エラーメッセージ: %s", truncate(errorMessage, 300))
 	}
+	log.Printf("[Claude OUT] usage=input:%d output:%d tokens", message.Usage.InputTokens, message.Usage.OutputTokens)
 	return message.Content[0].Text
 }
 
@@ -503,6 +505,7 @@ func analyzeWithClaude(errorContext string) map[string]interface{} {
 - should_create_pr はコードの修正が明確に特定できる場合のみ true にしてください
 - 設定やインフラの問題はコメントのみで PR は作成しないでください`, errorContext)
 
+	log.Printf("[Claude IN] Messages.New model=claude-opus-4-6 prompt=%d文字", len(prompt))
 	message, err := client.Messages.New(context.Background(), anthropic.MessageNewParams{
 		Model:     anthropic.F(anthropic.Model("claude-opus-4-6")),
 		MaxTokens: anthropic.F(int64(2000)),
@@ -511,7 +514,7 @@ func analyzeWithClaude(errorContext string) map[string]interface{} {
 		}),
 	})
 	if err != nil {
-		log.Printf("Claude APIエラー: %v", err)
+		log.Printf("[Claude IN] エラー: %v", err)
 		return map[string]interface{}{
 			"summary":          fmt.Sprintf("Claude API呼び出しエラー: %v", err),
 			"should_create_pr": false,
@@ -519,6 +522,7 @@ func analyzeWithClaude(errorContext string) map[string]interface{} {
 	}
 
 	responseText := message.Content[0].Text
+	log.Printf("[Claude OUT] usage=input:%d output:%d tokens response=%s", message.Usage.InputTokens, message.Usage.OutputTokens, truncate(responseText, 200))
 
 	// JSONを抽出
 	if strings.Contains(responseText, "```json") {
@@ -718,14 +722,16 @@ func verifySlackSignature(headers http.Header, body []byte) bool {
 }
 
 func getThreadMessages(channelID, threadTS, botToken string) []map[string]interface{} {
-	url := fmt.Sprintf("https://slack.com/api/conversations.replies?channel=%s&ts=%s", channelID, threadTS)
-	req, _ := http.NewRequest("GET", url, nil)
+	apiURL := fmt.Sprintf("https://slack.com/api/conversations.replies?channel=%s&ts=%s", channelID, threadTS)
+	log.Printf("[Slack IN] conversations.replies channel=%s thread_ts=%s", channelID, threadTS)
+
+	req, _ := http.NewRequest("GET", apiURL, nil)
 	req.Header.Set("Authorization", "Bearer "+botToken)
 
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Printf("Slack API エラー: %v", err)
+		log.Printf("[Slack IN] エラー: %v", err)
 		return nil
 	}
 	defer resp.Body.Close()
@@ -740,6 +746,7 @@ func getThreadMessages(channelID, threadTS, botToken string) []map[string]interf
 			result = append(result, msg)
 		}
 	}
+	log.Printf("[Slack IN] conversations.replies -> %d件取得", len(result))
 	return result
 }
 
@@ -757,6 +764,8 @@ func extractErrorContext(messages []map[string]interface{}) string {
 }
 
 func postSlackMessage(channelID, threadTS, botToken, text string) {
+	log.Printf("[Slack OUT] chat.postMessage channel=%s thread_ts=%s text=%s", channelID, threadTS, truncate(text, 100))
+
 	data, _ := json.Marshal(map[string]string{
 		"channel":   channelID,
 		"thread_ts": threadTS,
@@ -770,7 +779,7 @@ func postSlackMessage(channelID, threadTS, botToken, text string) {
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Printf("Slack投稿エラー: %v", err)
+		log.Printf("[Slack OUT] エラー: %v", err)
 		return
 	}
 	defer resp.Body.Close()
@@ -778,7 +787,9 @@ func postSlackMessage(channelID, threadTS, botToken, text string) {
 	var result map[string]interface{}
 	json.NewDecoder(resp.Body).Decode(&result)
 	if ok, _ := result["ok"].(bool); !ok {
-		log.Printf("Slack投稿エラー: %v", result["error"])
+		log.Printf("[Slack OUT] エラー: %v", result["error"])
+	} else {
+		log.Printf("[Slack OUT] 投稿成功")
 	}
 }
 
@@ -809,9 +820,11 @@ func githubRequest(method, url string, headers map[string]string, data interface
 		req.Header.Set(k, v)
 	}
 
+	log.Printf("[GitHub OUT] %s %s", method, url)
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
+		log.Printf("[GitHub OUT] エラー: %v", err)
 		return nil, err
 	}
 	defer resp.Body.Close()
@@ -822,9 +835,11 @@ func githubRequest(method, url string, headers map[string]string, data interface
 		if len(respBody) < limit {
 			limit = len(respBody)
 		}
+		log.Printf("[GitHub OUT] HTTP %d: %s", resp.StatusCode, string(respBody[:limit]))
 		return nil, fmt.Errorf("HTTP Error %d: %s", resp.StatusCode, string(respBody[:limit]))
 	}
 
+	log.Printf("[GitHub OUT] HTTP %d OK", resp.StatusCode)
 	var result map[string]interface{}
 	if err := json.Unmarshal(respBody, &result); err != nil {
 		return nil, err
