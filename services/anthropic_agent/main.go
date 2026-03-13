@@ -98,7 +98,12 @@ func handlePubSubNotify(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if errorMessage == "" {
-		errorMessage = "詳細不明のエラー"
+		// フォールバック: ログエントリ全体をJSON文字列としてClaudeに渡す
+		if raw, err := json.Marshal(logEntry); err == nil {
+			errorMessage = string(raw)
+		} else {
+			errorMessage = "詳細不明のエラー"
+		}
 	}
 
 	// サービス名を特定
@@ -282,9 +287,22 @@ func fetchRepoContext(logEntry map[string]interface{}) string {
 		fmt.Sprintf("https://api.github.com/repos/%s/%s/git/trees/HEAD?recursive=1", owner, repo),
 		headers, nil)
 	if err != nil {
-		// サービス名のリポジトリが見つからない場合はスキップ
-		// (無関係なリポジトリのコードを使わない)
-		return fmt.Sprintf("## GitHubリポジトリ\nリポジトリ `%s/%s` が見つかりませんでした。\n\n", owner, serviceName)
+		// サービス名の末尾サフィックスを除いて再試行 (例: example-api → example)
+		for _, suffix := range []string{"-api", "-service", "-svc", "-app", "-worker"} {
+			if strings.HasSuffix(repo, suffix) {
+				trimmed := strings.TrimSuffix(repo, suffix)
+				treeResp, err = githubRequest("GET",
+					fmt.Sprintf("https://api.github.com/repos/%s/%s/git/trees/HEAD?recursive=1", owner, trimmed),
+					headers, nil)
+				if err == nil {
+					repo = trimmed
+					break
+				}
+			}
+		}
+		if err != nil {
+			return fmt.Sprintf("## GitHubリポジトリ\nリポジトリ `%s/%s` が見つかりませんでした。\n\n", owner, serviceName)
+		}
 	}
 
 	// ソースファイルのパスを収集 (最大20件)
