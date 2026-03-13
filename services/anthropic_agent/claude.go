@@ -12,10 +12,10 @@ import (
 	"github.com/anthropics/anthropic-sdk-go/option"
 )
 
-// callClaude はプロンプトを送信してテキストレスポンスを返す共通関数
+// callClaude sends a prompt and returns the text response.
 func callClaude(prompt string, maxTokens int64) string {
 	client := anthropic.NewClient(option.WithAPIKey(os.Getenv("ANTHROPIC_API_KEY")))
-	log.Printf("[Claude IN] model=claude-opus-4-6 prompt=%d文字", len(prompt))
+	log.Printf("[Claude IN] model=claude-opus-4-6 prompt=%d chars", len(prompt))
 
 	message, err := client.Messages.New(context.Background(), anthropic.MessageNewParams{
 		Model:     anthropic.F(anthropic.Model("claude-opus-4-6")),
@@ -25,7 +25,7 @@ func callClaude(prompt string, maxTokens int64) string {
 		}),
 	})
 	if err != nil {
-		log.Printf("[Claude IN] エラー: %v", err)
+		log.Printf("[Claude IN] error: %v", err)
 		return ""
 	}
 	log.Printf("[Claude OUT] usage=input:%d output:%d tokens", message.Usage.InputTokens, message.Usage.OutputTokens)
@@ -33,43 +33,43 @@ func callClaude(prompt string, maxTokens int64) string {
 }
 
 func analyzeWithClaude(errorContext string) map[string]interface{} {
-	prompt := fmt.Sprintf(`あなたはGCPのエラーを分析するエキスパートエンジニアです。
-以下のエラーログを分析して、JSON形式で回答してください。
+	prompt := fmt.Sprintf(`You are an expert engineer specializing in GCP error analysis.
+Analyze the following error log and respond in JSON format.
 
-エラーコンテキスト:
+Error context:
 %s
 
-以下のJSON形式で回答してください:
+Respond in the following JSON format:
 {
-  "summary": "エラーの概要と原因の説明（Slack表示用、Markdownで）",
-  "root_cause": "根本原因の特定",
+  "summary": "Summary and explanation of the error (for Slack display, in Markdown)",
+  "root_cause": "Identified root cause",
   "severity": "critical/high/medium/low",
-  "service_name": "エラーが発生したサービス名（例: example-api）。不明な場合は空文字",
+  "service_name": "Name of the service where the error occurred (e.g. example-api). Empty string if unknown.",
   "should_create_pr": true/false,
-  "pr_title": "PRタイトル（should_create_pr=trueの場合）",
-  "pr_description": "PR説明（should_create_pr=trueの場合）",
+  "pr_title": "PR title (if should_create_pr=true)",
+  "pr_description": "PR description (if should_create_pr=true)",
   "fix_suggestion": {
-    "file_path": "修正するファイルパス",
-    "description": "修正内容の説明",
-    "code_snippet": "修正コードの例"
+    "file_path": "Path of the file to fix",
+    "description": "Description of the fix",
+    "code_snippet": "Example fix code"
   }
 }
 
-注意:
-- should_create_pr はコードの修正が明確に特定できる場合のみ true にしてください
-- 設定やインフラの問題はコメントのみで PR は作成しないでください`, errorContext)
+Notes:
+- Set should_create_pr to true only when a specific code fix can be clearly identified
+- For configuration or infrastructure issues, do not create a PR`, errorContext)
 
 	responseText := callClaude(prompt, 2000)
 	if responseText == "" {
 		return map[string]interface{}{
-			"summary":          "Claude API呼び出しエラー",
+			"summary":          "Claude API call error",
 			"should_create_pr": false,
 		}
 	}
 
 	log.Printf("[Claude OUT] response=%s", truncate(responseText, 200))
 
-	// JSONを抽出
+	// Extract JSON from response
 	if strings.Contains(responseText, "```json") {
 		parts := strings.SplitN(responseText, "```json", 2)
 		responseText = strings.SplitN(parts[1], "```", 2)[0]
@@ -86,7 +86,7 @@ func analyzeWithClaude(errorContext string) map[string]interface{} {
 
 	var result map[string]interface{}
 	if err := json.Unmarshal([]byte(strings.TrimSpace(responseText)), &result); err != nil {
-		log.Printf("JSON解析エラー: %v", err)
+		log.Printf("JSON parse error: %v", err)
 		return map[string]interface{}{
 			"summary":          responseText,
 			"should_create_pr": false,

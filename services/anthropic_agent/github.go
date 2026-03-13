@@ -13,9 +13,9 @@ import (
 	"time"
 )
 
-// resolveRepo は REPO_MAP 環境変数からサービス名に対応するリポジトリ名を返す。
-// REPO_MAP 形式: "example-api=example,foo-svc=foo"
-// 見つからない場合は空文字を返す。
+// resolveRepo returns the repository name for the given service name from the REPO_MAP env var.
+// REPO_MAP format: "example-api=example,foo-svc=foo"
+// Returns an empty string if no mapping is found.
 func resolveRepo(serviceName string) string {
 	if repoMap := os.Getenv("REPO_MAP"); repoMap != "" {
 		for _, entry := range strings.Split(repoMap, ",") {
@@ -34,7 +34,7 @@ func createGitHubPR(analysis map[string]interface{}) string {
 	owner := os.Getenv("GITHUB_OWNER")
 	repo := resolveRepo(getStr(analysis, "service_name"))
 	if repo == "" {
-		log.Printf("GitHub PR作成エラー: リポジトリ解決失敗 service_name=%s", getStr(analysis, "service_name"))
+		log.Printf("GitHub PR creation failed: could not resolve repo for service_name=%s", getStr(analysis, "service_name"))
 		return ""
 	}
 	baseURL := fmt.Sprintf("https://api.github.com/repos/%s/%s", owner, repo)
@@ -42,24 +42,24 @@ func createGitHubPR(analysis map[string]interface{}) string {
 	headers := githubHeaders(token)
 	branchName := fmt.Sprintf("fix/auto-%d", time.Now().Unix())
 
-	// デフォルトブランチのSHAを取得
+	// Get SHA of the default branch
 	refResp, err := githubRequest("GET", baseURL+"/git/ref/heads/main", headers, nil)
 	if err != nil {
-		log.Printf("GitHub ref取得エラー: %v", err)
+		log.Printf("GitHub ref fetch error: %v", err)
 		return ""
 	}
 	sha := refResp["object"].(map[string]interface{})["sha"].(string)
 
-	// 新しいブランチを作成
+	// Create new branch
 	if _, err := githubRequest("POST", baseURL+"/git/refs", headers, map[string]interface{}{
 		"ref": "refs/heads/" + branchName,
 		"sha": sha,
 	}); err != nil {
-		log.Printf("GitHub ブランチ作成エラー: %v", err)
+		log.Printf("GitHub branch creation error: %v", err)
 		return ""
 	}
 
-	// ファイルが指定されている場合は更新
+	// Update file if specified
 	if fix, ok := analysis["fix_suggestion"].(map[string]interface{}); ok {
 		filePath := getStr(fix, "file_path")
 		if filePath != "" && !strings.Contains(filePath, " ") && !strings.Contains(filePath, "(") {
@@ -69,37 +69,37 @@ func createGitHubPR(analysis map[string]interface{}) string {
 				"content": base64.StdEncoding.EncodeToString([]byte(codeSnippet)),
 				"branch":  branchName,
 			}
-			// 既存ファイルのSHAを取得 (更新に必要)
+			// Get existing file SHA (required for updates)
 			if existing, err := githubRequest("GET", baseURL+"/contents/"+filePath, headers, nil); err == nil {
 				if fileSHA, ok := existing["sha"].(string); ok {
 					updateData["sha"] = fileSHA
 				}
 			}
 			if _, err := githubRequest("PUT", baseURL+"/contents/"+filePath, headers, updateData); err != nil {
-				log.Printf("GitHub ファイル更新エラー: %v", err)
+				log.Printf("GitHub file update error: %v", err)
 			}
 		}
 	}
 
-	// PRを作成
+	// Create PR
 	fix, _ := analysis["fix_suggestion"].(map[string]interface{})
 	fixDesc := ""
 	if fix != nil {
 		fixDesc = getStr(fix, "description")
 	}
-	prBody := fmt.Sprintf(`## 🤖 AI Agent による自動修正PR
+	prBody := fmt.Sprintf(`## 🤖 Auto-fix PR by AI Agent
 
-### 根本原因
+### Root Cause
 %s
 
-### 修正内容
+### Fix Description
 %s
 
-### 分析サマリー
+### Analysis Summary
 %s
 
 ---
-*このPRはGCPエラーログを検知したAI Agentによって自動作成されました*`,
+*This PR was automatically created by the AI Agent upon detecting a GCP error log.*`,
 		getStr(analysis, "root_cause"), fixDesc, getStr(analysis, "summary"))
 
 	prResp, err := githubRequest("POST", baseURL+"/pulls", headers, map[string]interface{}{
@@ -109,7 +109,7 @@ func createGitHubPR(analysis map[string]interface{}) string {
 		"base":  "main",
 	})
 	if err != nil {
-		log.Printf("GitHub PR作成エラー: %v", err)
+		log.Printf("GitHub PR creation error: %v", err)
 		return ""
 	}
 
@@ -122,25 +122,25 @@ func createGitHubIssue(analysis map[string]interface{}) string {
 	owner := os.Getenv("GITHUB_OWNER")
 	repo := resolveRepo(getStr(analysis, "service_name"))
 	if token == "" || owner == "" || repo == "" {
-		log.Printf("GitHub Issue作成エラー: 環境変数未設定 GITHUB_TOKEN=%v GITHUB_OWNER=%v repo=%q service_name=%q",
+		log.Printf("GitHub Issue creation failed: missing config GITHUB_TOKEN=%v GITHUB_OWNER=%v repo=%q service_name=%q",
 			token != "", owner != "", repo, getStr(analysis, "service_name"))
 		return ""
 	}
 	baseURL := fmt.Sprintf("https://api.github.com/repos/%s/%s", owner, repo)
 
-	issueBody := fmt.Sprintf(`## 🤖 AI Agent によるエラー報告
+	issueBody := fmt.Sprintf(`## 🤖 Error Report by AI Agent
 
-### 根本原因
+### Root Cause
 %s
 
-### 分析サマリー
+### Analysis Summary
 %s
 
-### 深刻度
+### Severity
 %s
 
 ---
-*このIssueはGCPエラーログを検知したAI Agentによって自動作成されました*`,
+*This Issue was automatically created by the AI Agent upon detecting a GCP error log.*`,
 		getStr(analysis, "root_cause"),
 		getStr(analysis, "summary"),
 		getStrOr(analysis, "severity", "unknown"))
@@ -153,7 +153,7 @@ func createGitHubIssue(analysis map[string]interface{}) string {
 		}
 	}
 	if title == "" {
-		title = "bug: GCPエラー検知 from AI agent"
+		title = "bug: GCP error detected by AI agent"
 	}
 
 	resp, err := githubRequest("POST", baseURL+"/issues", githubHeaders(token), map[string]interface{}{
@@ -161,7 +161,7 @@ func createGitHubIssue(analysis map[string]interface{}) string {
 		"body":  issueBody,
 	})
 	if err != nil {
-		log.Printf("GitHub Issue作成エラー: %v", err)
+		log.Printf("GitHub Issue creation error: %v", err)
 		return ""
 	}
 
@@ -200,7 +200,7 @@ func githubRequest(method, url string, headers map[string]string, data interface
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Printf("[GitHub OUT] エラー: %v", err)
+		log.Printf("[GitHub OUT] error: %v", err)
 		return nil, err
 	}
 	defer resp.Body.Close()

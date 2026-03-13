@@ -34,14 +34,14 @@ func handlePubSubNotify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Pub/Sub メッセージをデコード
+	// Decode Pub/Sub message
 	decoded, err := base64.StdEncoding.DecodeString(msg.Message.Data)
 	if err != nil {
 		http.Error(w, "Bad Request", http.StatusBadRequest)
 		return
 	}
 
-	// 即座に 200 を返して Pub/Sub の再送を防ぐ (Claude/GitHub API は数秒かかるため)
+	// Return 200 immediately to prevent Pub/Sub redelivery (Claude/GitHub API calls take several seconds)
 	w.WriteHeader(http.StatusOK)
 	if f, ok := w.(http.Flusher); ok {
 		f.Flush()
@@ -49,7 +49,7 @@ func handlePubSubNotify(w http.ResponseWriter, r *http.Request) {
 
 	go func() {
 
-	// ログエントリを解析
+	// Parse log entry
 	var logEntry map[string]interface{}
 	if err := json.Unmarshal(decoded, &logEntry); err != nil {
 		logEntry = map[string]interface{}{"textPayload": string(decoded)}
@@ -68,7 +68,7 @@ func handlePubSubNotify(w http.ResponseWriter, r *http.Request) {
 	errorMessage := getStr(logEntry, "textPayload")
 	if errorMessage == "" {
 		if jp, ok := logEntry["jsonPayload"].(map[string]interface{}); ok {
-			// log/slog は "msg"、他のロガーは "message" を使う
+			// log/slog uses "msg", other loggers use "message"
 			errorMessage = getStr(jp, "msg")
 			if errorMessage == "" {
 				errorMessage = getStr(jp, "message")
@@ -76,15 +76,15 @@ func handlePubSubNotify(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if errorMessage == "" {
-		// フォールバック: ログエントリ全体をJSON文字列としてClaudeに渡す
+		// Fallback: pass the entire log entry as a JSON string to Claude
 		if raw, err := json.Marshal(logEntry); err == nil {
 			errorMessage = string(raw)
 		} else {
-			errorMessage = "詳細不明のエラー"
+			errorMessage = "unknown error"
 		}
 	}
 
-	// サービス名を特定
+	// Identify service name
 	serviceName := ""
 	for _, key := range []string{"service_name", "function_name", "job_name"} {
 		if v, ok := labels[key].(string); ok && v != "" {
@@ -93,7 +93,7 @@ func handlePubSubNotify(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Cloud Logging の該当ログへの直接リンクを生成
+	// Build a direct link to the log entry in Cloud Logging
 	projectID := os.Getenv("PROJECT_ID")
 	if projectID == "" {
 		projectID = "unknown"
@@ -103,18 +103,18 @@ func handlePubSubNotify(w http.ResponseWriter, r *http.Request) {
 	timestamp := getStr(logEntry, "timestamp")
 	loggingURL := buildLoggingURL(projectID, logName, insertID, timestamp)
 
-	log.Printf("Pub/Sub受信: severity=%s, resource=%s, service=%s", severity, resourceType, serviceName)
+	log.Printf("Pub/Sub received: severity=%s, resource=%s, service=%s", severity, resourceType, serviceName)
 
-	// REPO_MAPに登録されていないサービスはスキップ
+	// Skip services not registered in REPO_MAP
 	if resolveRepo(serviceName) == "" {
-		log.Printf("スキップ: service_name=%q はREPO_MAPに未登録 (severity=%s resource=%s)", serviceName, severity, resourceType)
+		log.Printf("Skipped: service_name=%q is not registered in REPO_MAP (severity=%s resource=%s)", serviceName, severity, resourceType)
 		return
 	}
 
-	// Claudeでエラーを分析
+	// Analyze error with Claude
 	analysis := analyzeErrorForNotification(severity, resourceType, errorMessage, logEntry)
 
-	// Slackに分析結果を通知
+	// Send analysis to Slack
 	webhookURL := os.Getenv("SLACK_WEBHOOK_URL")
 	owner := os.Getenv("GITHUB_OWNER")
 
@@ -130,10 +130,10 @@ func handlePubSubNotify(w http.ResponseWriter, r *http.Request) {
 		emoji = ":warning:"
 	}
 
-	// フィールドを構築
-	projectField := fmt.Sprintf("*プロジェクトID:*\n`%s`", projectID)
+	// Build fields
+	projectField := fmt.Sprintf("*Project ID:*\n`%s`", projectID)
 
-	githubField := "*GitHub:*\n未特定"
+	githubField := "*GitHub:*\nnot identified"
 	if owner != "" && serviceName != "" {
 		repo := resolveRepo(serviceName)
 		if repo != "" {
@@ -141,9 +141,9 @@ func handlePubSubNotify(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	serviceField := fmt.Sprintf("*サービス名:*\n`%s`", serviceName)
+	serviceField := fmt.Sprintf("*Service:*\n`%s`", serviceName)
 	if serviceName == "" {
-		serviceField = fmt.Sprintf("*サービス名:*\n%s", resourceType)
+		serviceField = fmt.Sprintf("*Service:*\n%s", resourceType)
 	}
 
 	slackMsg := map[string]interface{}{
@@ -152,7 +152,7 @@ func handlePubSubNotify(w http.ResponseWriter, r *http.Request) {
 				"type": "header",
 				"text": map[string]string{
 					"type": "plain_text",
-					"text": fmt.Sprintf("%s GCPエラー検知: %s", emoji, severity),
+					"text": fmt.Sprintf("%s GCP Error Detected: %s", emoji, severity),
 				},
 			},
 			{
@@ -166,7 +166,7 @@ func handlePubSubNotify(w http.ResponseWriter, r *http.Request) {
 				"type": "section",
 				"fields": []map[string]string{
 					{"type": "mrkdwn", "text": serviceField},
-					{"type": "mrkdwn", "text": "*エラー:*"},
+					{"type": "mrkdwn", "text": "*Error:*"},
 				},
 			},
 			{
@@ -174,7 +174,7 @@ func handlePubSubNotify(w http.ResponseWriter, r *http.Request) {
 				"elements": []map[string]interface{}{
 					{
 						"type": "button",
-						"text": map[string]string{"type": "plain_text", "text": "Cloud Loggingで確認"},
+						"text": map[string]string{"type": "plain_text", "text": "View in Cloud Logging"},
 						"url":   loggingURL,
 						"style": "danger",
 					},
@@ -184,7 +184,7 @@ func handlePubSubNotify(w http.ResponseWriter, r *http.Request) {
 				"type": "section",
 				"text": map[string]string{
 					"type": "mrkdwn",
-					"text": fmt.Sprintf(":brain: *AI分析:*\n%s", analysis),
+					"text": fmt.Sprintf(":brain: *AI Analysis:*\n%s", analysis),
 				},
 			},
 			{"type": "divider"},
@@ -193,7 +193,7 @@ func handlePubSubNotify(w http.ResponseWriter, r *http.Request) {
 				"elements": []map[string]string{
 					{
 						"type": "mrkdwn",
-						"text": ":robot_face: このメッセージのスレッド内でメンションしてください\n• `@relics9-bot fix` - AI分析 & GitHub PRを自動作成\n• `@relics9-bot issue` - AI分析 & GitHub Issueを作成",
+						"text": ":robot_face: Mention this bot in the thread:\n• `@relics9-bot fix` - Analyze & auto-create a GitHub PR\n• `@relics9-bot issue` - Analyze & create a GitHub Issue",
 					},
 				},
 			},
@@ -205,29 +205,28 @@ func handlePubSubNotify(w http.ResponseWriter, r *http.Request) {
 	req.Header.Set("Content-Type", "application/json")
 	client := &http.Client{Timeout: 10 * time.Second}
 	if _, err := client.Do(req); err != nil {
-		log.Printf("Slack通知エラー: %v", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		log.Printf("Slack notification error: %v", err)
 		return
 	}
 
-		log.Printf("Slack通知完了: severity=%s, resource=%s", severity, resourceType)
+		log.Printf("Slack notification sent: severity=%s, resource=%s", severity, resourceType)
 	}()
 }
 
 func analyzeErrorForNotification(severity, resourceType, errorMessage string, logEntry map[string]interface{}) string {
-	// GitHubからリポジトリのコードを取得してコンテキストに追加
+	// Fetch repository code from GitHub to add as context
 	repoContext := fetchRepoContext(logEntry)
 
-	prompt := fmt.Sprintf(`GCPエラーログを簡潔に分析してください。Markdownで回答してください。
+	prompt := fmt.Sprintf(`Analyze the following GCP error log concisely. Respond in Markdown.
 
-重大度: %s
-リソース: %s
-エラー: %s
+Severity: %s
+Resource: %s
+Error: %s
 
 %s
-- 何が起きたか
-- 考えられる原因（コードの具体的な箇所があれば指摘してください）
-- 推奨アクション`, severity, resourceType, errorMessage, repoContext)
+- What happened
+- Possible causes (point to specific code locations if applicable)
+- Recommended actions`, severity, resourceType, errorMessage, repoContext)
 
 	return callClaude(prompt, 1000)
 }
@@ -239,7 +238,7 @@ func fetchRepoContext(logEntry map[string]interface{}) string {
 		return ""
 	}
 
-	// ログのリソースラベルからサービス名を特定
+	// Identify service name from resource labels
 	resource, _ := logEntry["resource"].(map[string]interface{})
 	labels, _ := resource["labels"].(map[string]interface{})
 	serviceName := ""
@@ -253,14 +252,14 @@ func fetchRepoContext(logEntry map[string]interface{}) string {
 		return ""
 	}
 
-	// REPO_MAP からリポジトリ名を解決
+	// Resolve repository name from REPO_MAP
 	repo := resolveRepo(serviceName)
 	if repo == "" {
 		return ""
 	}
 	headers := githubHeaders(token)
 
-	// リポジトリのファイルツリーを取得
+	// Fetch repository file tree
 	treeResp, err := githubRequest("GET",
 		fmt.Sprintf("https://api.github.com/repos/%s/%s/git/trees/HEAD?recursive=1", owner, repo),
 		headers, nil)
@@ -268,7 +267,7 @@ func fetchRepoContext(logEntry map[string]interface{}) string {
 		return ""
 	}
 
-	// ソースファイルのパスを収集 (最大20件)
+	// Collect source file paths (up to 20)
 	tree, _ := treeResp["tree"].([]interface{})
 	var sourceFiles []string
 	for _, item := range tree {
@@ -294,9 +293,9 @@ func fetchRepoContext(logEntry map[string]interface{}) string {
 		return ""
 	}
 
-	// ファイル内容を取得 (合計8000文字まで)
+	// Fetch file contents (up to 8000 characters total)
 	var codeContext strings.Builder
-	codeContext.WriteString(fmt.Sprintf("## GitHubリポジトリ: %s/%s\n\n", owner, repo))
+	codeContext.WriteString(fmt.Sprintf("## GitHub Repository: %s/%s\n\n", owner, repo))
 	totalLen := 0
 	for _, path := range sourceFiles {
 		if totalLen >= 8000 {
@@ -317,7 +316,7 @@ func fetchRepoContext(logEntry map[string]interface{}) string {
 		content := string(decoded)
 		remaining := 8000 - totalLen
 		if len(content) > remaining {
-			content = content[:remaining] + "\n...(省略)"
+			content = content[:remaining] + "\n...(truncated)"
 		}
 		codeContext.WriteString(fmt.Sprintf("### %s\n```\n%s\n```\n\n", path, content))
 		totalLen += len(content)

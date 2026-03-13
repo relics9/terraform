@@ -17,7 +17,7 @@ import (
 )
 
 func handleSlackEvent(w http.ResponseWriter, r *http.Request) {
-	// Slackのリトライは無視 (3秒タイムアウトによる重複処理を防ぐ)
+	// Ignore Slack retries to prevent duplicate processing caused by 3-second timeout
 	if r.Header.Get("X-Slack-Retry-Num") != "" {
 		w.WriteHeader(http.StatusOK)
 		return
@@ -29,7 +29,7 @@ func handleSlackEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Slackの署名検証
+	// Verify Slack request signature
 	if !verifySlackSignature(r.Header, bodyBytes) {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
@@ -41,7 +41,7 @@ func handleSlackEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Slack URL Verification (初回設定時)
+	// Slack URL verification (initial setup)
 	if payload["type"] == "url_verification" {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"challenge": payload["challenge"].(string)})
@@ -54,7 +54,7 @@ func handleSlackEvent(w http.ResponseWriter, r *http.Request) {
 	log.Printf("DEBUG: payload_type=%s, event_type=%s", payloadType, eventType)
 
 	if eventType == "app_mention" {
-		// 非同期で処理 (Slackは3秒以内のレスポンスが必要)
+		// Process asynchronously (Slack requires a response within 3 seconds)
 		go processMention(event)
 	}
 
@@ -84,7 +84,7 @@ func processMention(event map[string]interface{}) {
 				prURL := createGitHubPR(analysis)
 				if prURL != "" {
 					postSlackMessage(channelID, threadTS, botToken,
-						fmt.Sprintf(":github: *自動修正PRを作成しました*\n%s", prURL))
+						fmt.Sprintf(":github: *Auto-fix PR created*\n%s", prURL))
 				}
 			}
 		}
@@ -97,22 +97,22 @@ func processMention(event map[string]interface{}) {
 		issueURL := createGitHubIssue(analysis)
 		if issueURL != "" {
 			postSlackMessage(channelID, threadTS, botToken,
-				fmt.Sprintf(":github: *GitHub Issueを作成しました*\n%s", issueURL))
+				fmt.Sprintf(":github: *GitHub Issue created*\n%s", issueURL))
 		} else {
 			postSlackMessage(channelID, threadTS, botToken,
-				":x: GitHub Issueの作成に失敗しました")
+				":x: Failed to create GitHub Issue")
 		}
 
 	default:
 		postSlackMessage(channelID, threadTS, botToken,
-			":wave: こんにちは！使い方:\n• `@relics9-bot fix` - エラーを分析してGitHub PRを作成します\n• `@relics9-bot issue` - エラーをGitHub Issueとして登録します")
+			":wave: Hello! Usage:\n• `@relics9-bot fix` - Analyze error and auto-create a GitHub PR\n• `@relics9-bot issue` - Register error as a GitHub Issue")
 	}
 }
 
 func verifySlackSignature(headers http.Header, body []byte) bool {
 	signingSecret := os.Getenv("SLACK_SIGNING_SECRET")
 	if signingSecret == "" {
-		log.Println("警告: SLACK_SIGNING_SECRETが未設定です")
+		log.Println("Warning: SLACK_SIGNING_SECRET is not set")
 		return true
 	}
 
@@ -142,7 +142,7 @@ func getThreadMessages(channelID, threadTS, botToken string) []map[string]interf
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Printf("[Slack IN] エラー: %v", err)
+		log.Printf("[Slack IN] error: %v", err)
 		return nil
 	}
 	defer resp.Body.Close()
@@ -157,7 +157,7 @@ func getThreadMessages(channelID, threadTS, botToken string) []map[string]interf
 			result = append(result, msg)
 		}
 	}
-	log.Printf("[Slack IN] conversations.replies -> %d件取得", len(result))
+	log.Printf("[Slack IN] conversations.replies -> %d messages", len(result))
 	return result
 }
 
@@ -190,7 +190,7 @@ func postSlackMessage(channelID, threadTS, botToken, text string) {
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Printf("[Slack OUT] エラー: %v", err)
+		log.Printf("[Slack OUT] error: %v", err)
 		return
 	}
 	defer resp.Body.Close()
@@ -198,8 +198,8 @@ func postSlackMessage(channelID, threadTS, botToken, text string) {
 	var result map[string]interface{}
 	json.NewDecoder(resp.Body).Decode(&result)
 	if ok, _ := result["ok"].(bool); !ok {
-		log.Printf("[Slack OUT] エラー: %v", result["error"])
+		log.Printf("[Slack OUT] error: %v", result["error"])
 	} else {
-		log.Printf("[Slack OUT] 投稿成功")
+		log.Printf("[Slack OUT] message posted successfully")
 	}
 }
