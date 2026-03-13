@@ -115,13 +115,6 @@ func handlePubSubNotify(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// GitHub URL を生成
-	owner := os.Getenv("GITHUB_OWNER")
-	githubURL := ""
-	if owner != "" && serviceName != "" {
-		githubURL = fmt.Sprintf("https://github.com/%s/%s", owner, serviceName)
-	}
-
 	// Cloud Logging の該当ログへの直接リンクを生成
 	projectID := os.Getenv("PROJECT_ID")
 	if projectID == "" {
@@ -152,14 +145,10 @@ func handlePubSubNotify(w http.ResponseWriter, r *http.Request) {
 		emoji = ":warning:"
 	}
 
-	// サービス名・GitHub URL のフィールドを構築
+	// サービス名フィールドを構築
 	serviceField := fmt.Sprintf("*サービス名:*\n`%s`", serviceName)
 	if serviceName == "" {
 		serviceField = fmt.Sprintf("*リソース種別:*\n%s", resourceType)
-	}
-	githubField := "*GitHub:*\n未特定"
-	if githubURL != "" {
-		githubField = fmt.Sprintf("*GitHub:*\n<%s|%s/%s>", githubURL, owner, serviceName)
 	}
 
 	slackMsg := map[string]interface{}{
@@ -175,7 +164,6 @@ func handlePubSubNotify(w http.ResponseWriter, r *http.Request) {
 				"type": "section",
 				"fields": []map[string]string{
 					{"type": "mrkdwn", "text": serviceField},
-					{"type": "mrkdwn", "text": githubField},
 					{"type": "mrkdwn", "text": fmt.Sprintf("*リソース種別:*\n%s", resourceType)},
 					{"type": "mrkdwn", "text": fmt.Sprintf("*エラー:*\n```%s```", truncate(errorMessage, 200))},
 				},
@@ -491,6 +479,7 @@ func analyzeWithClaude(errorContext string) map[string]interface{} {
   "summary": "エラーの概要と原因の説明（Slack表示用、Markdownで）",
   "root_cause": "根本原因の特定",
   "severity": "critical/high/medium/low",
+  "service_name": "エラーが発生したサービス名（例: example-api）。不明な場合は空文字",
   "should_create_pr": true/false,
   "pr_title": "PRタイトル（should_create_pr=trueの場合）",
   "pr_description": "PR説明（should_create_pr=trueの場合）",
@@ -550,6 +539,51 @@ func analyzeWithClaude(errorContext string) map[string]interface{} {
 	return result
 }
 
+// resolveRepo はサービス名から実際の GitHub リポジトリ名を解決する。
+// 優先順位: 1) REPO_MAP 環境変数 (例: "example-api=example,foo-svc=foo")
+//           2) GitHub API でリポジトリ存在確認 + サフィックス除去フォールバック
+//           3) GITHUB_REPO 環境変数
+func resolveRepo(serviceName string) string {
+	owner := os.Getenv("GITHUB_OWNER")
+	token := os.Getenv("GITHUB_TOKEN")
+
+	// 1) REPO_MAP から検索
+	if repoMap := os.Getenv("REPO_MAP"); repoMap != "" {
+		for _, entry := range strings.Split(repoMap, ",") {
+			parts := strings.SplitN(strings.TrimSpace(entry), "=", 2)
+			if len(parts) == 2 && strings.TrimSpace(parts[0]) == serviceName {
+				log.Printf("[resolveRepo] REPO_MAP hit: %s -> %s", serviceName, parts[1])
+				return strings.TrimSpace(parts[1])
+			}
+		}
+	}
+
+	// 2) GitHub API でリポジトリを探索
+	if owner != "" && token != "" && serviceName != "" {
+		headers := githubHeaders(token)
+		candidates := []string{serviceName}
+		for _, suffix := range []string{"-api", "-service", "-svc", "-app", "-worker"} {
+			if strings.HasSuffix(serviceName, suffix) {
+				candidates = append(candidates, strings.TrimSuffix(serviceName, suffix))
+			}
+		}
+		for _, candidate := range candidates {
+			_, err := githubRequest("GET",
+				fmt.Sprintf("https://api.github.com/repos/%s/%s", owner, candidate),
+				headers, nil)
+			if err == nil {
+				log.Printf("[resolveRepo] GitHub API hit: %s -> %s", serviceName, candidate)
+				return candidate
+			}
+		}
+	}
+
+	// 3) GITHUB_REPO フォールバック
+	fallback := os.Getenv("GITHUB_REPO")
+	log.Printf("[resolveRepo] fallback: %s -> %s", serviceName, fallback)
+	return fallback
+}
+
 // ==============================================================================
 // GitHub PR作成
 // ==============================================================================
@@ -557,7 +591,11 @@ func analyzeWithClaude(errorContext string) map[string]interface{} {
 func createGitHubPR(analysis map[string]interface{}) string {
 	token := os.Getenv("GITHUB_TOKEN")
 	owner := os.Getenv("GITHUB_OWNER")
-	repo := os.Getenv("GITHUB_REPO")
+	repo := resolveRepo(getStr(analysis, "service_name"))
+	if repo == "" {
+		log.Printf("GitHub PR作成エラー: リポジトリ解決失敗 service_name=%s", getStr(analysis, "service_name"))
+		return ""
+	}
 	baseURL := fmt.Sprintf("https://api.github.com/repos/%s/%s", owner, repo)
 
 	headers := githubHeaders(token)
@@ -645,10 +683,10 @@ func createGitHubPR(analysis map[string]interface{}) string {
 func createGitHubIssue(analysis map[string]interface{}) string {
 	token := os.Getenv("GITHUB_TOKEN")
 	owner := os.Getenv("GITHUB_OWNER")
-	repo := os.Getenv("GITHUB_REPO")
+	repo := resolveRepo(getStr(analysis, "service_name"))
 	if token == "" || owner == "" || repo == "" {
-		log.Printf("GitHub Issue作成エラー: 環境変数未設定 GITHUB_TOKEN=%v GITHUB_OWNER=%v GITHUB_REPO=%v",
-			token != "", owner != "", repo != "")
+		log.Printf("GitHub Issue作成エラー: 環境変数未設定 GITHUB_TOKEN=%v GITHUB_OWNER=%v repo=%q service_name=%q",
+			token != "", owner != "", repo, getStr(analysis, "service_name"))
 		return ""
 	}
 	baseURL := fmt.Sprintf("https://api.github.com/repos/%s/%s", owner, repo)
