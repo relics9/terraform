@@ -37,7 +37,7 @@ func main() {
 	}
 
 	http.HandleFunc("/notify", handlePubSubNotify) // Pub/Sub Push subscription
-	http.HandleFunc("/", handleSlackEvent)          // Slack Events API
+	http.HandleFunc("/", handleSlackEvent)         // Slack Events API
 	log.Printf("Listening on port %s", port)
 	if err := http.ListenAndServe(":"+port, nil); err != nil {
 		log.Fatal(err)

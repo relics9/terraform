@@ -35,9 +35,15 @@ variable "github_owner" {
 }
 
 variable "repo_map" {
-  description = "Service name to GitHub repository mapping (e.g. \"example-api1=example1,example-api2=example2,foo-svc=foo,...\")"
+  description = "Service name to GitHub repository mapping (e.g. \"service_name=git_repo_name,example-api=example,...\")"
   type        = string
   default     = ""
+}
+
+variable "bot_name" {
+  description = "Slack bot mention name (e.g. \"@Claude AI\")"
+  type        = string
+  default     = "@Claude AI"
 }
 
 variable "log_filter" {

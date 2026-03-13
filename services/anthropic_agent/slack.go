@@ -105,7 +105,7 @@ func processMention(event map[string]interface{}) {
 
 	default:
 		postSlackMessage(channelID, threadTS, botToken,
-			":wave: Hello! Usage:\n• `@claude-bot fix` - Analyze error and auto-create a GitHub PR\n• `@claude-bot issue` - Register error as a GitHub Issue")
+			fmt.Sprintf(":wave: Hello! Usage:\n• `%s fix` - Analyze error and auto-create a GitHub PR\n• `%s issue` - Register error as a GitHub Issue", os.Getenv("BOT_NAME"), os.Getenv("BOT_NAME")))
 	}
 }
 

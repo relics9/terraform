@@ -14,11 +14,20 @@ import (
 
 // callClaude sends a prompt and returns the text response.
 func callClaude(prompt string, maxTokens int64) string {
+	return callClaudeWithModel(prompt, maxTokens, "claude-opus-4-6")
+}
+
+// callClaudeHaiku uses the cheaper Haiku model for simple analysis tasks.
+func callClaudeHaiku(prompt string, maxTokens int64) string {
+	return callClaudeWithModel(prompt, maxTokens, "claude-haiku-4-5-20251001")
+}
+
+func callClaudeWithModel(prompt string, maxTokens int64, model string) string {
 	client := anthropic.NewClient(option.WithAPIKey(os.Getenv("ANTHROPIC_API_KEY")))
-	log.Printf("[Claude IN] model=claude-opus-4-6 prompt=%d chars", len(prompt))
+	log.Printf("[Claude IN] model=%s prompt=%d chars", model, len(prompt))
 
 	message, err := client.Messages.New(context.Background(), anthropic.MessageNewParams{
-		Model:     anthropic.F(anthropic.Model("claude-opus-4-6")),
+		Model:     anthropic.F(anthropic.Model(model)),
 		MaxTokens: anthropic.F(maxTokens),
 		Messages: anthropic.F([]anthropic.MessageParam{
 			anthropic.NewUserMessage(anthropic.NewTextBlock(prompt)),
@@ -28,7 +37,7 @@ func callClaude(prompt string, maxTokens int64) string {
 		log.Printf("[Claude IN] error: %v", err)
 		return ""
 	}
-	log.Printf("[Claude OUT] usage=input:%d output:%d tokens", message.Usage.InputTokens, message.Usage.OutputTokens)
+	log.Printf("[Claude OUT] model=%s usage=input:%d output:%d tokens", model, message.Usage.InputTokens, message.Usage.OutputTokens)
 	return message.Content[0].Text
 }
 

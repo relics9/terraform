@@ -73,6 +73,16 @@ func handlePubSubNotify(w http.ResponseWriter, r *http.Request) {
 			if errorMessage == "" {
 				errorMessage = getStr(jp, "message")
 			}
+			// Append path/method/query context if available (slog structured fields)
+			if method := getStr(jp, "method"); method != "" {
+				errorMessage += fmt.Sprintf("\nmethod: %s", method)
+			}
+			if path := getStr(jp, "path"); path != "" {
+				errorMessage += fmt.Sprintf(", path: %s", path)
+			}
+			if query := getStr(jp, "query"); query != "" {
+				errorMessage += fmt.Sprintf(", query: %s", query)
+			}
 		}
 	}
 	if errorMessage == "" {
@@ -112,7 +122,7 @@ func handlePubSubNotify(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Analyze error with Claude
-	analysis := analyzeErrorForNotification(severity, resourceType, errorMessage, logEntry)
+	analysis := analyzeErrorForNotification(severity, resourceType, errorMessage)
 
 	// Send analysis to Slack
 	webhookURL := os.Getenv("SLACK_WEBHOOK_URL")
@@ -147,59 +157,61 @@ func handlePubSubNotify(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slackMsg := map[string]interface{}{
-		"blocks": []map[string]interface{}{
-			{
-				"type": "header",
-				"text": map[string]string{
-					"type": "plain_text",
-					"text": fmt.Sprintf("%s GCP Error Detected: %s", emoji, severity),
-				},
+	"unfurl_links": false,
+	"unfurl_media": false,
+	"blocks": []map[string]interface{}{
+		{
+			"type": "header",
+			"text": map[string]string{
+				"type": "plain_text",
+				"text": fmt.Sprintf("%s GCP Error Detected: %s", emoji, severity),
 			},
-			{
-				"type": "section",
-				"fields": []map[string]string{
-					{"type": "mrkdwn", "text": projectField},
-					{"type": "mrkdwn", "text": githubField},
-				},
+		},
+		{
+			"type": "section",
+			"fields": []map[string]string{
+				{"type": "mrkdwn", "text": projectField},
+				{"type": "mrkdwn", "text": githubField},
+				{"type": "mrkdwn", "text": serviceField},
 			},
-			{
-				"type": "section",
-				"fields": []map[string]string{
-					{"type": "mrkdwn", "text": serviceField},
-					{"type": "mrkdwn", "text": "*Error:*"},
-				},
+		},
+		{
+			"type": "section",
+			"text": map[string]string{
+				"type": "mrkdwn",
+				"text": fmt.Sprintf("*Error:*\n```%s```", truncate(errorMessage, 300)),
 			},
-			{
-				"type": "actions",
-				"elements": []map[string]interface{}{
-					{
-						"type": "button",
-						"text": map[string]string{"type": "plain_text", "text": "View in Cloud Logging"},
-						"url":   loggingURL,
-						"style": "danger",
-					},
-				},
-			},
-			{
-				"type": "section",
-				"text": map[string]string{
-					"type": "mrkdwn",
-					"text": fmt.Sprintf(":brain: *AI Analysis:*\n%s", analysis),
-				},
-			},
-			{"type": "divider"},
-			{
-				"type": "context",
-				"elements": []map[string]string{
-					{
-						"type": "mrkdwn",
-						"text": ":robot_face: Mention this bot in the thread:\n• `@claude-bot fix` - Analyze & auto-create a GitHub PR\n• `@claude-bot issue` - Analyze & create a GitHub Issue",
-					},
+		},
+		{
+			"type": "actions",
+			"elements": []map[string]interface{}{
+				{
+					"type": "button",
+					"text": map[string]string{"type": "plain_text", "text": "View in Cloud Logging"},
+					"url":   loggingURL,
+					"style": "danger",
 				},
 			},
 		},
-	}
-
+		{
+			"type": "section",
+			"text": map[string]string{
+				"type": "mrkdwn",
+				"text": fmt.Sprintf(":brain: *AI Analysis (claude-haiku-4-5-20251001):*\n%s", analysis),
+			},
+		},
+		{"type": "divider"},
+		{
+			"type": "context",
+			"elements": []map[string]interface{}{
+				{
+					"type": "mrkdwn",
+					"text": fmt.Sprintf(":robot_face: Mention this bot in the thread:\n• `%s fix` - Analyze & auto-create a GitHub PR _(claude-opus-4-6)_\n• `%s issue` - Analyze & create a GitHub Issue _(claude-opus-4-6)_", os.Getenv("BOT_NAME"), os.Getenv("BOT_NAME")),
+				},
+			},
+		},
+	},
+}
 	data, _ := json.Marshal(slackMsg)
 	req, _ := http.NewRequest("POST", webhookURL, bytes.NewReader(data))
 	req.Header.Set("Content-Type", "application/json")
@@ -213,22 +225,27 @@ func handlePubSubNotify(w http.ResponseWriter, r *http.Request) {
 	}()
 }
 
-func analyzeErrorForNotification(severity, resourceType, errorMessage string, logEntry map[string]interface{}) string {
-	// Fetch repository code from GitHub to add as context
-	repoContext := fetchRepoContext(logEntry)
+func analyzeErrorForNotification(severity, resourceType, errorMessage string) string {
+	prompt := fmt.Sprintf(`Analyze the following GCP error log. Reply using EXACTLY this format (copy the structure):
 
-	prompt := fmt.Sprintf(`Analyze the following GCP error log concisely. Respond in Markdown.
+*What happened*
+One sentence description.
+
+*Possible causes*
+• cause one
+• cause two
+
+*Recommended actions*
+• action one
+• action two
+
+Rules: Use only *bold* and • bullets. No ##, no -, no numbered lists, no backticks, no code blocks.
 
 Severity: %s
 Resource: %s
-Error: %s
+Error: %s`, severity, resourceType, errorMessage)
 
-%s
-- What happened
-- Possible causes (point to specific code locations if applicable)
-- Recommended actions`, severity, resourceType, errorMessage, repoContext)
-
-	return callClaude(prompt, 1000)
+	return callClaudeHaiku(prompt, 500)
 }
 
 func fetchRepoContext(logEntry map[string]interface{}) string {

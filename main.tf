@@ -113,9 +113,12 @@ resource "google_pubsub_subscription" "error_logs_push" {
   }
 
   retry_policy {
-    minimum_backoff = "10s"
-    maximum_backoff = "300s"
+    minimum_backoff = "60s"
+    maximum_backoff = "600s"
   }
+
+  # メッセージ保持期間（滞留メッセージを自動破棄）
+  message_retention_duration = "3600s"
 
   depends_on = [google_cloud_run_v2_service.anthropic_agent]
 }
@@ -214,6 +217,13 @@ resource "google_cloud_run_v2_service" "anthropic_agent" {
 
     timeout = "300s"
 
+    # 同時実行数を制限（ループ暴走防止）
+    max_instance_request_concurrency = 4
+
+    scaling {
+      max_instance_count = 3
+    }
+
     containers {
       image = "${var.region}-docker.pkg.dev/${var.project_id}/relics9/anthropic-agent:latest"
 
@@ -225,6 +235,10 @@ resource "google_cloud_run_v2_service" "anthropic_agent" {
       }
 
       env {
+        name  = "SOURCE_HASH"
+        value = null_resource.build_anthropic_agent.triggers["source_hash"]
+      }
+      env {
         name  = "PROJECT_ID"
         value = var.project_id
       }
@@ -235,6 +249,10 @@ resource "google_cloud_run_v2_service" "anthropic_agent" {
       env {
         name  = "REPO_MAP"
         value = var.repo_map
+      }
+      env {
+        name  = "BOT_NAME"
+        value = var.bot_name
       }
 
       env {

@@ -99,7 +99,7 @@ func createGitHubPR(analysis map[string]interface{}) string {
 %s
 
 ---
-*This PR was automatically created by the AI Agent upon detecting a GCP error log.*`,
+*This PR was automatically created by the AI Agent upon detecting a GCP error log. Model: claude-opus-4-6*`,
 		getStr(analysis, "root_cause"), fixDesc, getStr(analysis, "summary"))
 
 	prResp, err := githubRequest("POST", baseURL+"/pulls", headers, map[string]interface{}{
@@ -140,7 +140,7 @@ func createGitHubIssue(analysis map[string]interface{}) string {
 %s
 
 ---
-*This Issue was automatically created by the AI Agent upon detecting a GCP error log.*`,
+*This Issue was automatically created by the AI Agent upon detecting a GCP error log. Model: claude-opus-4-6*`,
 		getStr(analysis, "root_cause"),
 		getStr(analysis, "summary"),
 		getStrOr(analysis, "severity", "unknown"))
