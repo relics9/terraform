@@ -162,8 +162,6 @@ func handlePubSubNotify(w http.ResponseWriter, r *http.Request) {
 		serviceField = fmt.Sprintf("*サービス名:*\n%s", resourceType)
 	}
 
-	loggingField := fmt.Sprintf("*エラーログ:*\n<%s|Cloud Loggingで確認>", loggingURL)
-
 	slackMsg := map[string]interface{}{
 		"blocks": []map[string]interface{}{
 			{
@@ -178,8 +176,19 @@ func handlePubSubNotify(w http.ResponseWriter, r *http.Request) {
 				"fields": []map[string]string{
 					{"type": "mrkdwn", "text": projectField},
 					{"type": "mrkdwn", "text": githubField},
-					{"type": "mrkdwn", "text": serviceField},
-					{"type": "mrkdwn", "text": loggingField},
+				},
+			},
+			{
+				"type": "section",
+				"text": map[string]string{
+					"type": "mrkdwn",
+					"text": serviceField,
+				},
+				"accessory": map[string]interface{}{
+					"type": "button",
+					"text": map[string]string{"type": "plain_text", "text": "Cloud Loggingで確認"},
+					"url":   loggingURL,
+					"style": "danger",
 				},
 			},
 			{
