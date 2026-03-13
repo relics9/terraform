@@ -14,14 +14,9 @@ output "functions_service_account" {
   value       = google_service_account.functions_sa.email
 }
 
-output "slack_error_alerts_channel_id" {
-  description = "Slack #gcp-error-alerts チャンネルID"
-  value       = slack_conversation.error_alerts.id
-}
-
-output "slack_ai_ops_channel_id" {
-  description = "Slack #ai-ops チャンネルID"
-  value       = slack_conversation.ai_ops.id
+output "slack_error_alert_analysis_channel_id" {
+  description = "Slack #error-alert-analyse channel ID"
+  value       = slack_conversation.error_alert_analysis.id
 }
 
 output "anthropic_agent_url" {

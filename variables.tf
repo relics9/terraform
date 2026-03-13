@@ -34,9 +34,10 @@ variable "github_owner" {
   default     = "relics9"
 }
 
-variable "github_repo" {
-  description = "GitHub repository name to create PRs in"
+variable "repo_map" {
+  description = "Service name to GitHub repository mapping (e.g. \"example-api1=example1,example-api2=example2,foo-svc=foo,...\")"
   type        = string
+  default     = ""
 }
 
 variable "log_filter" {

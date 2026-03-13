@@ -10,21 +10,10 @@ provider "slack" {
 # Slack チャンネル
 # ==============================================================================
 
-# GCPエラー通知チャンネル
-resource "slack_conversation" "error_alerts" {
-  name                   = "gcp-error-alerts"
-  topic                  = "GCPエラー自動通知 | AI分析 → GitHub PR自動作成"
-  purpose                = "GCPのエラーログを監視し、AIがエラーを分析してGitHub PRを自動作成するチャンネルです"
-  is_private             = false
-  action_on_destroy      = "archive"
-  adopt_existing_channel = true
-}
-
-# AI分析・PR通知チャンネル
-resource "slack_conversation" "ai_ops" {
-  name                   = "ai-ops"
-  topic                  = "AI Agent による自動修正通知"
-  purpose                = "AI AgentがGitHub PRを作成した際の通知チャンネルです"
+resource "slack_conversation" "error_alert_analysis" {
+  name                   = "error-alert-analysis"
+  topic                  = "GCP Error Alerts & AI Analysis"
+  purpose                = "Monitors GCP error logs, analyzes them with Claude AI, and auto-creates GitHub PRs/Issues"
   is_private             = false
   action_on_destroy      = "archive"
   adopt_existing_channel = true
