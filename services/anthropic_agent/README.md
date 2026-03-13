@@ -112,14 +112,14 @@ log_filter = "severity>=ERROR
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `ANTHROPIC_API_KEY` | ✅ | Claude API key |
-| `SLACK_WEBHOOK_URL` | ✅ | Incoming Webhook URL for error notifications |
-| `SLACK_BOT_TOKEN` | ✅ | Slack Bot Token (`xoxb-...`) |
-| `SLACK_SIGNING_SECRET` | recommended | Secret for verifying Slack request signatures |
 | `GITHUB_TOKEN` | ✅ | GitHub Personal Access Token |
 | `GITHUB_USER` | ✅ | GitHub owner name (e.g. `your-github-username`) |
-| `REPO_MAP` | ✅ | Service name to repository mapping (e.g. `example-api=example,foo-svc=foo`) |
 | `PROJECT_ID` | ✅ | GCP project ID |
-| `BOT_NAME` | ✅ | Slack bot mention name (e.g. `@Claude AI`) |
+| `REPO_MAP` | ✅ | Service name to repository mapping (e.g. `example-api=example,foo-svc=foo`) |
+| `SLACK_BOT_NAME` | ✅ | Slack bot mention name (e.g. `@Claude AI`) |
+| `SLACK_BOT_TOKEN` | ✅ | Slack Bot Token (`xoxb-...`) |
+| `SLACK_SIGNING_SECRET` | recommended | Secret for verifying Slack request signatures |
+| `SLACK_WEBHOOK_URL` | ✅ | Incoming Webhook URL for error notifications |
 
 ## File Structure
 

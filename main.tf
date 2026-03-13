@@ -251,8 +251,8 @@ resource "google_cloud_run_v2_service" "anthropic_agent" {
         value = var.repo_map
       }
       env {
-        name  = "BOT_NAME"
-        value = var.bot_name
+        name  = "SLACK_BOT_NAME"
+        value = var.slack_bot_name
       }
 
       env {

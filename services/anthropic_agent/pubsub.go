@@ -206,7 +206,7 @@ func handlePubSubNotify(w http.ResponseWriter, r *http.Request) {
 			"elements": []map[string]interface{}{
 				{
 					"type": "mrkdwn",
-					"text": fmt.Sprintf(":robot_face: Mention this bot in the thread:\n• `%s fix` - Analyze & auto-create a GitHub PR _(claude-opus-4-6)_\n• `%s issue` - Analyze & create a GitHub Issue _(claude-opus-4-6)_", os.Getenv("BOT_NAME"), os.Getenv("BOT_NAME")),
+					"text": fmt.Sprintf(":robot_face: Mention this bot in the thread:\n• `%s fix` - Analyze & auto-create a GitHub PR _(claude-opus-4-6)_\n• `%s issue` - Analyze & create a GitHub Issue _(claude-opus-4-6)_", os.Getenv("SLACK_BOT_NAME"), os.Getenv("SLACK_BOT_NAME")),
 				},
 			},
 		},
