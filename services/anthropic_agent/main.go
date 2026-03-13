@@ -441,9 +441,6 @@ func processMention(event map[string]interface{}) {
 		errorContext := extractErrorContext(messages)
 		analysis := analyzeWithClaude(errorContext)
 
-		postSlackMessage(channelID, threadTS, botToken,
-			fmt.Sprintf(":brain: *AI エラー分析結果*\n\n%s", getStr(analysis, "summary")))
-
 		if getBool(analysis, "should_create_pr") {
 			if fix, ok := analysis["fix_suggestion"].(map[string]interface{}); ok && getStr(fix, "description") != "" {
 				prURL := createGitHubPR(analysis)
@@ -457,19 +454,7 @@ func processMention(event map[string]interface{}) {
 	case strings.Contains(textLower, "issue"):
 		messages := getThreadMessages(channelID, threadTS, botToken)
 		errorContext := extractErrorContext(messages)
-		log.Printf("issue: errorContext length=%d, messages=%d", len(errorContext), len(messages))
-
 		analysis := analyzeWithClaude(errorContext)
-		log.Printf("issue: analysis keys=%v", func() []string {
-			keys := make([]string, 0, len(analysis))
-			for k := range analysis {
-				keys = append(keys, k)
-			}
-			return keys
-		}())
-
-		postSlackMessage(channelID, threadTS, botToken,
-			fmt.Sprintf(":brain: *AI エラー分析結果*\n\n%s", getStr(analysis, "summary")))
 
 		issueURL := createGitHubIssue(analysis)
 		if issueURL != "" {
