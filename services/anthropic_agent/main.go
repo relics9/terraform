@@ -9,7 +9,28 @@ import (
 	"os"
 )
 
+var requiredEnvVars = []string{
+	"ANTHROPIC_API_KEY",
+	"SLACK_WEBHOOK_URL",
+	"SLACK_BOT_TOKEN",
+	"GITHUB_TOKEN",
+	"GITHUB_USER",
+	"REPO_MAP",
+	"PROJECT_ID",
+}
+
 func main() {
+	// Validate required environment variables
+	missing := []string{}
+	for _, key := range requiredEnvVars {
+		if os.Getenv(key) == "" {
+			missing = append(missing, key)
+		}
+	}
+	if len(missing) > 0 {
+		log.Fatalf("Missing required environment variables: %v", missing)
+	}
+
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"

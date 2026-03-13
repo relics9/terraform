@@ -116,7 +116,7 @@ func handlePubSubNotify(w http.ResponseWriter, r *http.Request) {
 
 	// Send analysis to Slack
 	webhookURL := os.Getenv("SLACK_WEBHOOK_URL")
-	owner := os.Getenv("GITHUB_OWNER")
+	owner := os.Getenv("GITHUB_USER")
 
 	severityEmoji := map[string]string{
 		"CRITICAL":  ":red_circle:",
@@ -193,7 +193,7 @@ func handlePubSubNotify(w http.ResponseWriter, r *http.Request) {
 				"elements": []map[string]string{
 					{
 						"type": "mrkdwn",
-						"text": ":robot_face: Mention this bot in the thread:\n• `@relics9-bot fix` - Analyze & auto-create a GitHub PR\n• `@relics9-bot issue` - Analyze & create a GitHub Issue",
+						"text": ":robot_face: Mention this bot in the thread:\n• `@claude-bot fix` - Analyze & auto-create a GitHub PR\n• `@claude-bot issue` - Analyze & create a GitHub Issue",
 					},
 				},
 			},
@@ -232,7 +232,7 @@ Error: %s
 }
 
 func fetchRepoContext(logEntry map[string]interface{}) string {
-	owner := os.Getenv("GITHUB_OWNER")
+	owner := os.Getenv("GITHUB_USER")
 	token := os.Getenv("GITHUB_TOKEN")
 	if owner == "" || token == "" {
 		return ""

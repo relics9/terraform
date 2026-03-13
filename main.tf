@@ -229,12 +229,12 @@ resource "google_cloud_run_v2_service" "anthropic_agent" {
         value = var.project_id
       }
       env {
-        name  = "GITHUB_OWNER"
+        name  = "GITHUB_USER"
         value = var.github_owner
       }
       env {
-        name  = "GITHUB_REPO"
-        value = var.github_repo
+        name  = "REPO_MAP"
+        value = var.repo_map
       }
 
       env {

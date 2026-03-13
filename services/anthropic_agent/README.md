@@ -32,7 +32,7 @@ flowchart TD
     Claude -->|"analysis result"| CloudRun
     CloudRun -->|"Block Kit notification"| SlackWebhook
 
-    SlackEvents -->|"POST /\n@relics9-bot fix/issue"| CloudRun
+    SlackEvents -->|"POST /\n@claude-bot fix/issue"| CloudRun
     CloudRun -->|"read thread\nconversations.replies"| SlackEvents
     CloudRun -->|"error analysis request"| Claude
     CloudRun -->|"create PR / Issue"| GitHub
@@ -59,10 +59,10 @@ GCP Cloud Logging
            └─ AI analysis result
 ```
 
-### 2. Auto-create GitHub PR (`@relics9-bot fix`)
+### 2. Auto-create GitHub PR (`@claude-bot fix`)
 
 ```
-Slack: @relics9-bot fix
+Slack: @claude-bot fix
   └─ Slack Events API → POST /
      └─ fetch thread messages
         └─ analyze error with Claude (evaluate should_create_pr)
@@ -71,10 +71,10 @@ Slack: @relics9-bot fix
                  └─ post link to Slack thread
 ```
 
-### 3. Create GitHub Issue (`@relics9-bot issue`)
+### 3. Create GitHub Issue (`@claude-bot issue`)
 
 ```
-Slack: @relics9-bot issue
+Slack: @claude-bot issue
   └─ Slack Events API → POST /
      └─ fetch thread messages
         └─ analyze error with Claude
@@ -91,7 +91,7 @@ Slack: @relics9-bot issue
 | `SLACK_BOT_TOKEN` | ✅ | Slack Bot Token (`xoxb-...`) |
 | `SLACK_SIGNING_SECRET` | recommended | Secret for verifying Slack request signatures |
 | `GITHUB_TOKEN` | ✅ | GitHub Personal Access Token |
-| `GITHUB_OWNER` | ✅ | GitHub owner name (e.g. `relics9`) |
+| `GITHUB_USER` | ✅ | GitHub owner name (e.g. `your-github-username`) |
 | `REPO_MAP` | ✅ | Service name to repository mapping (e.g. `example-api=example,foo-svc=foo`) |
 | `PROJECT_ID` | ✅ | GCP project ID |
 

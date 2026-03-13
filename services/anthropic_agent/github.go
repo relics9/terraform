@@ -31,7 +31,7 @@ func resolveRepo(serviceName string) string {
 
 func createGitHubPR(analysis map[string]interface{}) string {
 	token := os.Getenv("GITHUB_TOKEN")
-	owner := os.Getenv("GITHUB_OWNER")
+	owner := os.Getenv("GITHUB_USER")
 	repo := resolveRepo(getStr(analysis, "service_name"))
 	if repo == "" {
 		log.Printf("GitHub PR creation failed: could not resolve repo for service_name=%s", getStr(analysis, "service_name"))
@@ -119,10 +119,10 @@ func createGitHubPR(analysis map[string]interface{}) string {
 
 func createGitHubIssue(analysis map[string]interface{}) string {
 	token := os.Getenv("GITHUB_TOKEN")
-	owner := os.Getenv("GITHUB_OWNER")
+	owner := os.Getenv("GITHUB_USER")
 	repo := resolveRepo(getStr(analysis, "service_name"))
 	if token == "" || owner == "" || repo == "" {
-		log.Printf("GitHub Issue creation failed: missing config GITHUB_TOKEN=%v GITHUB_OWNER=%v repo=%q service_name=%q",
+		log.Printf("GitHub Issue creation failed: missing config GITHUB_TOKEN=%v GITHUB_USER=%v repo=%q service_name=%q",
 			token != "", owner != "", repo, getStr(analysis, "service_name"))
 		return ""
 	}

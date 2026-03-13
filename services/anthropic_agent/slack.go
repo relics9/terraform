@@ -105,7 +105,7 @@ func processMention(event map[string]interface{}) {
 
 	default:
 		postSlackMessage(channelID, threadTS, botToken,
-			":wave: Hello! Usage:\n• `@relics9-bot fix` - Analyze error and auto-create a GitHub PR\n• `@relics9-bot issue` - Register error as a GitHub Issue")
+			":wave: Hello! Usage:\n• `@claude-bot fix` - Analyze error and auto-create a GitHub PR\n• `@claude-bot issue` - Register error as a GitHub Issue")
 	}
 }
 
