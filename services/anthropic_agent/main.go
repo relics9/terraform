@@ -11,12 +11,14 @@ import (
 
 var requiredEnvVars = []string{
 	"ANTHROPIC_API_KEY",
-	"SLACK_WEBHOOK_URL",
-	"SLACK_BOT_TOKEN",
 	"GITHUB_TOKEN",
 	"GITHUB_USER",
-	"REPO_MAP",
 	"PROJECT_ID",
+	"REPO_MAP",
+	"SLACK_BOT_NAME",
+	"SLACK_BOT_TOKEN",
+	"SLACK_SIGNING_SECRET",
+	"SLACK_WEBHOOK_URL",
 }
 
 func main() {

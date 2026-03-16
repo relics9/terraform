@@ -7,8 +7,7 @@ Responds to Slack @mentions to automatically create GitHub PRs and Issues.
 
 | Use case | Model |
 |----------|-------|
-| Error notification analysis (`/notify`) | `claude-haiku-4-5-20251001` |
-| `@mention fix` / `@mention issue` commands | `claude-opus-4-6` |
+| `@mention fix` / `@mention issue` commands | `claude-opus-4-6` (configurable via `ANTHROPIC_CLAUDE_MODEL`) |
 
 ## Endpoints
 
@@ -35,8 +34,6 @@ flowchart TD
     PubSubTopic --> PubSubSub
     PubSubSub -->|"POST /notify"| CloudRun
 
-    CloudRun -->|"error analysis request<br/>(claude-haiku-4-5-20251001)"| Claude
-    Claude -->|"analysis result"| CloudRun
     CloudRun -->|"Block Kit notification"| SlackWebhook
 
     SlackEvents -->|"POST /<br/>@mention fix/issue"| CloudRun
@@ -60,13 +57,11 @@ GCP Cloud Logging
      └─ Push subscription calls POST /notify
         └─ resolves repository from REPO_MAP by service name
            └─ unregistered services are skipped (logged only)
-        └─ analyzes error with Claude (claude-haiku-4-5-20251001)
         └─ sends Block Kit notification via Slack Webhook
            ├─ Project ID / GitHub repository link
            ├─ Service name
            ├─ Error message (with method/path/query context)
-           ├─ View in Cloud Logging button
-           └─ AI analysis result
+           └─ View in Cloud Logging button
 ```
 
 ### 2. Auto-create GitHub PR (`@mention fix`)
@@ -112,13 +107,14 @@ log_filter = "severity>=ERROR
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `ANTHROPIC_API_KEY` | ✅ | Claude API key |
+| `ANTHROPIC_CLAUDE_MODEL` | optional | Claude model ID (default: `claude-opus-4-6`) |
 | `GITHUB_TOKEN` | ✅ | GitHub Personal Access Token |
 | `GITHUB_USER` | ✅ | GitHub owner name (e.g. `your-github-username`) |
 | `PROJECT_ID` | ✅ | GCP project ID |
 | `REPO_MAP` | ✅ | Service name to repository mapping (e.g. `example-api=example,foo-svc=foo`) |
 | `SLACK_BOT_NAME` | ✅ | Slack bot mention name (e.g. `@Claude AI`) |
 | `SLACK_BOT_TOKEN` | ✅ | Slack Bot Token (`xoxb-...`) |
-| `SLACK_SIGNING_SECRET` | recommended | Secret for verifying Slack request signatures |
+| `SLACK_SIGNING_SECRET` | ✅ | Slack Signing Secret for verifying request signatures |
 | `SLACK_WEBHOOK_URL` | ✅ | Incoming Webhook URL for error notifications |
 
 ## File Structure

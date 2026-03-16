@@ -14,7 +14,11 @@ import (
 
 // callClaude sends a prompt and returns the text response.
 func callClaude(prompt string, maxTokens int64) string {
-	return callClaudeWithModel(prompt, maxTokens, "claude-opus-4-6")
+	model := os.Getenv("ANTHROPIC_CLAUDE_MODEL")
+	if model == "" {
+		model = "claude-opus-4-6"
+	}
+	return callClaudeWithModel(prompt, maxTokens, model)
 }
 
 

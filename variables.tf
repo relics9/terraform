@@ -1,3 +1,9 @@
+variable "anthropic_claude_model" {
+  description = "Claude model ID to use for analysis (e.g. claude-opus-4-6)"
+  type        = string
+  default     = "claude-opus-4-6"
+}
+
 variable "credentials_file" {
   description = "Path to service account key JSON file"
   type        = string
@@ -42,6 +48,12 @@ variable "slack_bot_name" {
 
 variable "slack_bot_token" {
   description = "Slack Bot Token (xoxb-...) for AI agent to read messages"
+  type        = string
+  sensitive   = true
+}
+
+variable "slack_signing_secret" {
+  description = "Slack Signing Secret for verifying request signatures"
   type        = string
   sensitive   = true
 }

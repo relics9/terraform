@@ -86,6 +86,22 @@ resource "google_secret_manager_secret_version" "anthropic_api_key" {
   secret_data = local.anthropic_api_key
 }
 
+resource "google_secret_manager_secret" "slack_signing_secret" {
+  secret_id = "slack-signing-secret"
+  project   = var.project_id
+
+  replication {
+    auto {}
+  }
+
+  depends_on = [google_project_service.apis]
+}
+
+resource "google_secret_manager_secret_version" "slack_signing_secret" {
+  secret      = google_secret_manager_secret.slack_signing_secret.id
+  secret_data = var.slack_signing_secret
+}
+
 # ==============================================================================
 # Pub/Sub - ログイベントのメッセージキュー
 # ==============================================================================
@@ -235,16 +251,16 @@ resource "google_cloud_run_v2_service" "anthropic_agent" {
       }
 
       env {
-        name  = "SOURCE_HASH"
-        value = null_resource.build_anthropic_agent.triggers["source_hash"]
-      }
-      env {
-        name  = "PROJECT_ID"
-        value = var.project_id
+        name  = "ANTHROPIC_CLAUDE_MODEL"
+        value = var.anthropic_claude_model
       }
       env {
         name  = "GITHUB_USER"
         value = var.github_owner
+      }
+      env {
+        name  = "PROJECT_ID"
+        value = var.project_id
       }
       env {
         name  = "REPO_MAP"
@@ -254,21 +270,16 @@ resource "google_cloud_run_v2_service" "anthropic_agent" {
         name  = "SLACK_BOT_NAME"
         value = var.slack_bot_name
       }
+      env {
+        name  = "SOURCE_HASH"
+        value = null_resource.build_anthropic_agent.triggers["source_hash"]
+      }
 
       env {
-        name = "SLACK_WEBHOOK_URL"
+        name = "ANTHROPIC_API_KEY"
         value_source {
           secret_key_ref {
-            secret  = google_secret_manager_secret.slack_webhook_url.secret_id
-            version = "latest"
-          }
-        }
-      }
-      env {
-        name = "SLACK_BOT_TOKEN"
-        value_source {
-          secret_key_ref {
-            secret  = google_secret_manager_secret.slack_bot_token.secret_id
+            secret  = google_secret_manager_secret.anthropic_api_key.secret_id
             version = "latest"
           }
         }
@@ -283,10 +294,28 @@ resource "google_cloud_run_v2_service" "anthropic_agent" {
         }
       }
       env {
-        name = "ANTHROPIC_API_KEY"
+        name = "SLACK_BOT_TOKEN"
         value_source {
           secret_key_ref {
-            secret  = google_secret_manager_secret.anthropic_api_key.secret_id
+            secret  = google_secret_manager_secret.slack_bot_token.secret_id
+            version = "latest"
+          }
+        }
+      }
+      env {
+        name = "SLACK_SIGNING_SECRET"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.slack_signing_secret.secret_id
+            version = "latest"
+          }
+        }
+      }
+      env {
+        name = "SLACK_WEBHOOK_URL"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.slack_webhook_url.secret_id
             version = "latest"
           }
         }
