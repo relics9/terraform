@@ -121,10 +121,7 @@ func handlePubSubNotify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Analyze error with Claude
-	analysis := analyzeErrorForNotification(severity, resourceType, errorMessage)
-
-	// Send analysis to Slack
+	// Send notification to Slack
 	webhookURL := os.Getenv("SLACK_WEBHOOK_URL")
 	owner := os.Getenv("GITHUB_USER")
 
@@ -193,13 +190,6 @@ func handlePubSubNotify(w http.ResponseWriter, r *http.Request) {
 				},
 			},
 		},
-		{
-			"type": "section",
-			"text": map[string]string{
-				"type": "mrkdwn",
-				"text": fmt.Sprintf(":brain: *AI Analysis (claude-haiku-4-5-20251001):*\n%s", analysis),
-			},
-		},
 		{"type": "divider"},
 		{
 			"type": "context",
@@ -225,28 +215,6 @@ func handlePubSubNotify(w http.ResponseWriter, r *http.Request) {
 	}()
 }
 
-func analyzeErrorForNotification(severity, resourceType, errorMessage string) string {
-	prompt := fmt.Sprintf(`Analyze the following GCP error log. Reply using EXACTLY this format (copy the structure):
-
-*What happened*
-One sentence description.
-
-*Possible causes*
-• cause one
-• cause two
-
-*Recommended actions*
-• action one
-• action two
-
-Rules: Use only *bold* and • bullets. No ##, no -, no numbered lists, no backticks, no code blocks.
-
-Severity: %s
-Resource: %s
-Error: %s`, severity, resourceType, errorMessage)
-
-	return callClaudeHaiku(prompt, 500)
-}
 
 func fetchRepoContext(logEntry map[string]interface{}) string {
 	owner := os.Getenv("GITHUB_USER")

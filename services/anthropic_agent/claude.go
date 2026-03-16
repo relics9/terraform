@@ -17,10 +17,6 @@ func callClaude(prompt string, maxTokens int64) string {
 	return callClaudeWithModel(prompt, maxTokens, "claude-opus-4-6")
 }
 
-// callClaudeHaiku uses the cheaper Haiku model for simple analysis tasks.
-func callClaudeHaiku(prompt string, maxTokens int64) string {
-	return callClaudeWithModel(prompt, maxTokens, "claude-haiku-4-5-20251001")
-}
 
 func callClaudeWithModel(prompt string, maxTokens int64, model string) string {
 	client := anthropic.NewClient(option.WithAPIKey(os.Getenv("ANTHROPIC_API_KEY")))
