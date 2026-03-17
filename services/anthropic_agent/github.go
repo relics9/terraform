@@ -60,6 +60,7 @@ func createGitHubPR(analysis map[string]interface{}) string {
 	}
 
 	// Update file if specified
+	committed := false
 	if fix, ok := analysis["fix_suggestion"].(map[string]interface{}); ok {
 		filePath := getStr(fix, "file_path")
 		if filePath != "" && !strings.Contains(filePath, " ") && !strings.Contains(filePath, "(") {
@@ -77,8 +78,17 @@ func createGitHubPR(analysis map[string]interface{}) string {
 			}
 			if _, err := githubRequest("PUT", baseURL+"/contents/"+filePath, headers, updateData); err != nil {
 				log.Printf("GitHub file update error: %v", err)
+			} else {
+				committed = true
 			}
 		}
+	}
+
+	// No commits on branch — clean up and abort
+	if !committed {
+		log.Printf("GitHub PR creation skipped: no file committed to branch %s", branchName)
+		githubRequest("DELETE", baseURL+"/git/refs/heads/"+branchName, headers, nil)
+		return ""
 	}
 
 	// Create PR

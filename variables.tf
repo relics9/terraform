@@ -52,11 +52,6 @@ variable "slack_bot_token" {
   sensitive   = true
 }
 
-variable "slack_signing_secret" {
-  description = "Slack Signing Secret for verifying request signatures"
-  type        = string
-  sensitive   = true
-}
 
 variable "slack_webhook_url" {
   description = "Slack Incoming Webhook URL for error notifications"

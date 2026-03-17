@@ -7,7 +7,7 @@ Responds to Slack @mentions to automatically create GitHub PRs and Issues.
 
 | Use case | Model |
 |----------|-------|
-| `@mention fix` / `@mention issue` commands | `claude-opus-4-6` (configurable via `ANTHROPIC_CLAUDE_MODEL`) |
+| `@mention fix` / `@mention issue` commands | configurable via `ANTHROPIC_CLAUDE_MODEL` (default: `claude-opus-4-6`) |
 
 ## Endpoints
 

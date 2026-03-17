@@ -85,6 +85,9 @@ func processMention(event map[string]interface{}) {
 				if prURL != "" {
 					postSlackMessage(channelID, threadTS, botToken,
 						fmt.Sprintf(":github: *Auto-fix PR created*\n%s", prURL))
+				} else {
+					postSlackMessage(channelID, threadTS, botToken,
+						":x: Could not auto-create PR: no specific file to fix was identified.\nPlease create a PR manually based on the analysis above.")
 				}
 			}
 		}

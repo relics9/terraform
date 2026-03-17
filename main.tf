@@ -99,7 +99,7 @@ resource "google_secret_manager_secret" "slack_signing_secret" {
 
 resource "google_secret_manager_secret_version" "slack_signing_secret" {
   secret      = google_secret_manager_secret.slack_signing_secret.id
-  secret_data = var.slack_signing_secret
+  secret_data = local.slack_signing_secret
 }
 
 # ==============================================================================
