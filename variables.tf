@@ -1,7 +1,7 @@
 variable "anthropic_agent_path" {
   description = "Path to anthropic-agent source directory"
   type        = string
-  default     = "../../anthropic-agent"
+  default     = "../anthropic-agent"
 }
 
 variable "anthropic_claude_model" {
