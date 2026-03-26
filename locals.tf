@@ -4,8 +4,9 @@
 # ==============================================================================
 locals {
   # Slack App Configuration Token (slack-token.json)
-  _slack_content = file("${path.module}/slack-token.json")
-  slack_token    = trimspace(regex("Access Token\n([^\n]+)", local._slack_content)[0])
+  _slack_content       = file("${path.module}/slack-token.json")
+  slack_token          = trimspace(regex("Access Token\n([^\n]+)", local._slack_content)[0])
+  slack_signing_secret = trimspace(regex("Signing Secret\n([^\n]+)", local._slack_content)[0])
 
   # GitHub Personal Access Token (github-token.json)
   _github_content = file("${path.module}/github-token.json")
